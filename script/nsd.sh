@@ -1,0 +1,8 @@
+cast rpc anvil_impersonateAccount 0xe8e2123501A6Ec6f1b1C9Ecf4f6Dc156EB8E7212
+
+cast send 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 --unlocked --from 0xe8e2123501A6Ec6f1b1C9Ecf4f6Dc156EB8E7212 "transfer(address,uint256)(bool)" 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 100000000
+
+cast call 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 \
+  "balanceOf(address)(uint256)" \
+  0x70997970C51812dc3A010C7d01b50e0d17dc79C8 
+
