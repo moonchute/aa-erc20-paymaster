@@ -119,7 +119,7 @@ contract NSDToken is IAccount, BasePaymaster, NSDERC20 {
             require(cachedPrice != 0, "NSDToken : price not set");
             
             uint256 tokenAmount = (requiredPreFund + (REFUND_POSTOP_COST) * userOp.maxFeePerGas) * PRICE_MARKUP
-              * cachedPrice / (1e18 * PRICE_DENOMINATOR);
+              * cachedPrice / (PRICE_DENOMINATOR * 1e18);
             
             require(tokenAmount + amount <= balanceOf[from], "NSDToken : insufficient balance");
             _transfer(from, address(this), tokenAmount);
