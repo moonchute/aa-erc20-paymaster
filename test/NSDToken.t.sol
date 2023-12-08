@@ -151,6 +151,88 @@ contract NSDTokenTest is Test {
         assertEq(nsdToken.balanceOf(address(nsdToken)), 1);
     }
 
+    function testBurnNSDUserOp() public {
+        UserOperation[] memory userOps = new UserOperation[](1);
+        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory callData = abi.encodeWithSelector(
+            NSDToken.burnWithFee.selector,
+            alice,
+            bob,
+            10
+        );
+        uint256 beforeErc20 = erc20.balanceOf(bob);
+
+        userOps[0] = UserOperation({
+            sender: address(nsdToken),
+            nonce: uint256(0),
+            initCode: '',
+            callData: callData,
+            callGasLimit: 100000,
+            verificationGasLimit: 100000,
+            preVerificationGas: 100000,
+            maxFeePerGas: 172676895612,
+            maxPriorityFeePerGas: 46047172163,
+            paymasterAndData: paymasterAndData,
+            signature: "0x"
+        });
+        // sign
+        bytes32 userOpHash = entryPoint.getUserOpHash(userOps[0]);
+        bytes32 signMessage = ECDSA.toEthSignedMessageHash(userOpHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(aliceKey, signMessage);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        userOps[0].signature = signature;
+
+        entryPoint.handleOps(userOps, payable(owner));
+        uint256 afterErc20 = erc20.balanceOf(bob);
+
+        assertEq(nsdToken.balanceOf(alice), 89);
+        assertEq(nsdToken.balanceOf(address(nsdToken)), 1);
+        assertEq(afterErc20 - beforeErc20, 10);
+    }
+
+    function testBurnNSDUserOpFromSmartAccount() public {
+        vm.startPrank(alice);
+        address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
+        address account = address(new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice)));
+        nsdToken.transfer(account, 20);
+        vm.stopPrank();
+
+        UserOperation[] memory userOps = new UserOperation[](1);
+        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory callData = abi.encodeWithSelector(
+            NSDToken.burnWithFee.selector,
+            account,
+            bob,
+            10
+        );
+
+        userOps[0] = UserOperation({
+            sender: address(nsdToken),
+            nonce: uint256(0),
+            initCode: '',
+            callData: callData,
+            callGasLimit: 100000,
+            verificationGasLimit: 100000,
+            preVerificationGas: 100000,
+            maxFeePerGas: 172676895612,
+            maxPriorityFeePerGas: 46047172163,
+            paymasterAndData: paymasterAndData,
+            signature: "0x"
+        });
+        // sign
+        bytes32 userOpHash = entryPoint.getUserOpHash(userOps[0]);
+        bytes32 signMessage = ECDSA.toEthSignedMessageHash(userOpHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(aliceKey, signMessage);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        userOps[0].signature = signature;
+
+        entryPoint.handleOps(userOps, payable(owner));
+
+        assertEq(nsdToken.balanceOf(account), 9);
+        assertEq(nsdToken.balanceOf(address(nsdToken)), 1);
+        assertEq(erc20.balanceOf(bob), 10);
+    }
+
     function testInvalidSignature() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
