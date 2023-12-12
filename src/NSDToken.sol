@@ -62,6 +62,12 @@ contract NSDToken is IAccount, BasePaymaster, NSDERC20 {
         return true;
     }
 
+    function burnWithFee(address from, address to, uint256 amount) external {
+        _requireFromEntryPoint();
+        _burn(from, amount);
+        IERC20(token).transfer(to, amount);
+    }
+
     function _fetchPrice(IOracle _oracle) internal view returns (uint192 price) {
         (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = _oracle.latestRoundData();
         require(answer > 0, "NSDToken : Chainlink price <= 0");
@@ -88,7 +94,7 @@ contract NSDToken is IAccount, BasePaymaster, NSDERC20 {
         (address from,,) = abi.decode(userOp.callData[4:], (address, address, uint256));
 
         // transferWithFee(address,address,uint256)
-        if (selector != bytes4(0xf3408110)) {
+        if (selector != bytes4(0xf3408110) && selector != bytes4(0xea37cb54)) {
             return SIG_VALIDATION_FAILED;
         }
 
