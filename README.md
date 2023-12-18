@@ -1,17 +1,22 @@
-## Foundry
+## AA-ERC20 Paymaster
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+AA-ERC20 Paymaster is a paymaster which enable accounts to pay gas fee with "AA-ERC20" token.
 
-Foundry consists of:
+## Motivation
+Most existing paymasters operate on a permissioned basis or require specific pre-activation procedures. For instance, the Verifying Paymaster system relies on a third party to sponsor gas fees. Similarly, the ERC20 Paymaster mandates the execution of an "approve" call prior to its usage. 
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
 
-## Documentation
+This setup can be cumbersome and compromise the privacy of smart accounts, particularly those using stealth address plugins, due to the inherent permissions and activations involved.
 
-https://book.getfoundry.sh/
+
+## Solution
+The AA-ERC20 Paymaster addresses these challenges by seamlessly integrating the capabilities of "AA-ERC20" and "ERC20 Paymaster." This amalgamation enables the wrapping of ERC20 tokens into AA-ERC20 tokens, which can then be used to pay gas fees in a permissionless manner.
+
+
+### Feature
+- Eliminates the need for a third party to pay gas fees.
+- Allows gas fee payment without any prior setup or activation.
+- Supports fee-on-transfer tokens for transactions from both smart accounts and EOAs.
 
 ## Usage
 
@@ -25,42 +30,4 @@ $ forge build
 
 ```shell
 $ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
 ```
