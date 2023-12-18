@@ -47,7 +47,7 @@ contract AAERC20PaymasterTest is Test {
             new AAERC20Paymaster(entryPoint, IERC20Metadata(address(erc20)), tokenOracle, nativeOracle, owner);
 
         // update Oracle price
-        vm.store(address(aaERC20Paymaster), bytes32(uint256(4)), bytes32(uint256(10)));
+        vm.store(address(aaERC20Paymaster), bytes32(uint256(6)), bytes32(uint256(10)));
 
         // deposit paymaster
         deal(owner, 100 ether);
