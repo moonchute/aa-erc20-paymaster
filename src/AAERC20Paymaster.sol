@@ -13,9 +13,9 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
 import {IOracle} from "./interface/IOracle.sol";
-import {NSDERC20} from "./NSDERC20.sol";
+import {AAERC20} from "./AAERC20.sol";
 
-contract NSDToken is IAccount, BasePaymaster, NSDERC20 {
+contract AAERC20Paymaster is IAccount, BasePaymaster, AAERC20 {
     uint256 public constant PRICE_DENOMINATOR = 1e6;
     uint256 public constant REFUND_POSTOP_COST = 40000;
     uint256 public constant PRICE_MARKUP = 110e4;
@@ -70,10 +70,10 @@ contract NSDToken is IAccount, BasePaymaster, NSDERC20 {
 
     function _fetchPrice(IOracle _oracle) internal view returns (uint192 price) {
         (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = _oracle.latestRoundData();
-        require(answer > 0, "NSDToken : Chainlink price <= 0");
+        require(answer > 0, "AA-ERC20 : Chainlink price <= 0");
         // 2 days old price is considered stale since the price is updated every 24 hours
-        require(updatedAt >= block.timestamp - 60 * 60 * 24 * 2, "NSDToken : Incomplete round");
-        require(answeredInRound >= roundId, "NSDToken : Stale price");
+        require(updatedAt >= block.timestamp - 60 * 60 * 24 * 2, "AA-ERC20 : Incomplete round");
+        require(answeredInRound >= roundId, "AA-ERC20 : Stale price");
         price = uint192(int192(answer));
     }
 
@@ -117,17 +117,17 @@ contract NSDToken is IAccount, BasePaymaster, NSDERC20 {
         bytes32 userOpHash,
         uint256 requiredPreFund
     ) internal override returns (bytes memory context, uint256 validationData) {
-        require(userOp.sender == address(this), "NSDToken: only NSDToken can call paymaster");
+        require(userOp.sender == address(this), "AA-ERC20: only AA-ERC20 Paymaster can call paymaster");
         (address from,, uint256 amount) = abi.decode(userOp.callData[4:], (address, address, uint256));
 
         unchecked {
             uint256 cachedPrice = previousPrice;
-            require(cachedPrice != 0, "NSDToken : price not set");
+            require(cachedPrice != 0, "AA-ERC20 : price not set");
             
             uint256 tokenAmount = (requiredPreFund + (REFUND_POSTOP_COST) * userOp.maxFeePerGas) * PRICE_MARKUP
               * cachedPrice / (PRICE_DENOMINATOR * 1e18);
             
-            require(tokenAmount + amount <= balanceOf[from], "NSDToken : insufficient balance");
+            require(tokenAmount + amount <= balanceOf[from], "AA-ERC20 : insufficient balance");
             _transfer(from, address(this), tokenAmount);
 
             validationData = 0;

@@ -14,14 +14,14 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
-import {NSDToken} from "../src/NSDToken.sol";
+import {AAERC20Paymaster} from "../src/AAERC20Paymaster.sol";
 import {IOracle} from "../src/interface/IOracle.sol";
 import {TestERC20} from "../src/test/TestERC20.sol";
 import {TestSimpleAccount} from "../src/test/TestSimpleAccount.sol";
 import "forge-std/console2.sol";
 
-contract NSDTokenTest is Test {
-    NSDToken public nsdToken;
+contract AAERC20PaymasterTest is Test {
+    AAERC20Paymaster public aaERC20Paymaster;
     EntryPoint public entryPoint;
     TestERC20 public erc20;
     address owner;
@@ -41,48 +41,48 @@ contract NSDTokenTest is Test {
         IOracle tokenOracle = IOracle(address(bytes20(keccak256("tokenOracle"))));
         IOracle nativeOracle = IOracle(address(bytes20(keccak256("nativeOracle"))));
         vm.startPrank(owner);
-        nsdToken = new NSDToken(entryPoint, IERC20Metadata(address(erc20)), tokenOracle, nativeOracle, owner);
+        aaERC20Paymaster = new AAERC20Paymaster(entryPoint, IERC20Metadata(address(erc20)), tokenOracle, nativeOracle, owner);
         
         // update Oracle price 
-        vm.store(address(nsdToken), bytes32(uint256(4)), bytes32(uint256(10)));
+        vm.store(address(aaERC20Paymaster), bytes32(uint256(4)), bytes32(uint256(10)));
 
         // deposit paymaster
         deal(owner, 100 ether);
-        nsdToken.deposit{value: 10 ether}();
+        aaERC20Paymaster.deposit{value: 10 ether}();
         vm.stopPrank();
         // erc20 token
         vm.startPrank(alice);
         erc20.mint(alice, 1000);
-        erc20.approve(address(nsdToken), 100);
-        nsdToken.mint(alice, 100);
+        erc20.approve(address(aaERC20Paymaster), 100);
+        aaERC20Paymaster.mint(alice, 100);
         vm.stopPrank();
     }
 
     function testBeforeMint() public {
         assertEq(erc20.balanceOf(alice), 900);
-        assertEq(erc20.balanceOf(address(nsdToken)), 100);
-        assertEq(nsdToken.balanceOf(alice), 100);
+        assertEq(erc20.balanceOf(address(aaERC20Paymaster)), 100);
+        assertEq(aaERC20Paymaster.balanceOf(alice), 100);
     }
 
-    function testTransferNSD() public {
+    function testTransferAAERC20() public {
         vm.prank(alice);
-        nsdToken.transfer(bob, 10);
-        assertEq(nsdToken.balanceOf(alice), 90);
-        assertEq(nsdToken.balanceOf(bob), 10);
+        aaERC20Paymaster.transfer(bob, 10);
+        assertEq(aaERC20Paymaster.balanceOf(alice), 90);
+        assertEq(aaERC20Paymaster.balanceOf(bob), 10);
     }
 
-    function testTransferNSDUserOp() public {
+    function testTransferAAERC20UserOp() public {
         UserOperation[] memory userOps = new UserOperation[](1);
-        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(
-            NSDToken.transferWithFee.selector,
+            AAERC20Paymaster.transferWithFee.selector,
             alice,
             bob,
             10
         );
 
         userOps[0] = UserOperation({
-            sender: address(nsdToken),
+            sender: address(aaERC20Paymaster),
             nonce: uint256(0),
             initCode: '',
             callData: callData,
@@ -103,29 +103,29 @@ contract NSDTokenTest is Test {
 
         entryPoint.handleOps(userOps, payable(owner));
 
-        assertEq(nsdToken.balanceOf(bob), 10);
-        assertEq(nsdToken.balanceOf(alice), 89);
-        assertEq(nsdToken.balanceOf(address(nsdToken)), 1);
+        assertEq(aaERC20Paymaster.balanceOf(bob), 10);
+        assertEq(aaERC20Paymaster.balanceOf(alice), 89);
+        assertEq(aaERC20Paymaster.balanceOf(address(aaERC20Paymaster)), 1);
     }
 
-    function testTransferNSDUserOpFromSmartAccount() public {
+    function testTransferAAERC20UserOpFromSmartAccount() public {
         vm.startPrank(alice);
         address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
         address account = address(new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice)));
-        nsdToken.transfer(account, 20);
+        aaERC20Paymaster.transfer(account, 20);
         vm.stopPrank();
 
         UserOperation[] memory userOps = new UserOperation[](1);
-        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(
-            NSDToken.transferWithFee.selector,
+            AAERC20Paymaster.transferWithFee.selector,
             account,
             bob,
             10
         );
 
         userOps[0] = UserOperation({
-            sender: address(nsdToken),
+            sender: address(aaERC20Paymaster),
             nonce: uint256(0),
             initCode: '',
             callData: callData,
@@ -146,16 +146,16 @@ contract NSDTokenTest is Test {
 
         entryPoint.handleOps(userOps, payable(owner));
 
-        assertEq(nsdToken.balanceOf(bob), 10);
-        assertEq(nsdToken.balanceOf(account), 9);
-        assertEq(nsdToken.balanceOf(address(nsdToken)), 1);
+        assertEq(aaERC20Paymaster.balanceOf(bob), 10);
+        assertEq(aaERC20Paymaster.balanceOf(account), 9);
+        assertEq(aaERC20Paymaster.balanceOf(address(aaERC20Paymaster)), 1);
     }
 
-    function testBurnNSDUserOp() public {
+    function testBurnAAERC20UserOp() public {
         UserOperation[] memory userOps = new UserOperation[](1);
-        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(
-            NSDToken.burnWithFee.selector,
+            AAERC20Paymaster.burnWithFee.selector,
             alice,
             bob,
             10
@@ -163,7 +163,7 @@ contract NSDTokenTest is Test {
         uint256 beforeErc20 = erc20.balanceOf(bob);
 
         userOps[0] = UserOperation({
-            sender: address(nsdToken),
+            sender: address(aaERC20Paymaster),
             nonce: uint256(0),
             initCode: '',
             callData: callData,
@@ -185,29 +185,29 @@ contract NSDTokenTest is Test {
         entryPoint.handleOps(userOps, payable(owner));
         uint256 afterErc20 = erc20.balanceOf(bob);
 
-        assertEq(nsdToken.balanceOf(alice), 89);
-        assertEq(nsdToken.balanceOf(address(nsdToken)), 1);
+        assertEq(aaERC20Paymaster.balanceOf(alice), 89);
+        assertEq(aaERC20Paymaster.balanceOf(address(aaERC20Paymaster)), 1);
         assertEq(afterErc20 - beforeErc20, 10);
     }
 
-    function testBurnNSDUserOpFromSmartAccount() public {
+    function testBurnAAERC20UserOpFromSmartAccount() public {
         vm.startPrank(alice);
         address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
         address account = address(new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice)));
-        nsdToken.transfer(account, 20);
+        aaERC20Paymaster.transfer(account, 20);
         vm.stopPrank();
 
         UserOperation[] memory userOps = new UserOperation[](1);
-        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(
-            NSDToken.burnWithFee.selector,
+            AAERC20Paymaster.burnWithFee.selector,
             account,
             bob,
             10
         );
 
         userOps[0] = UserOperation({
-            sender: address(nsdToken),
+            sender: address(aaERC20Paymaster),
             nonce: uint256(0),
             initCode: '',
             callData: callData,
@@ -228,23 +228,23 @@ contract NSDTokenTest is Test {
 
         entryPoint.handleOps(userOps, payable(owner));
 
-        assertEq(nsdToken.balanceOf(account), 9);
-        assertEq(nsdToken.balanceOf(address(nsdToken)), 1);
+        assertEq(aaERC20Paymaster.balanceOf(account), 9);
+        assertEq(aaERC20Paymaster.balanceOf(address(aaERC20Paymaster)), 1);
         assertEq(erc20.balanceOf(bob), 10);
     }
 
     function testInvalidSignature() public {
         UserOperation[] memory userOps = new UserOperation[](1);
-        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(
-            NSDToken.transferWithFee.selector,
+            AAERC20Paymaster.transferWithFee.selector,
             alice,
             bob,
             10
         );
 
         userOps[0] = UserOperation({
-            sender: address(nsdToken),
+            sender: address(aaERC20Paymaster),
             nonce: uint256(0),
             initCode: '',
             callData: callData,
@@ -276,9 +276,9 @@ contract NSDTokenTest is Test {
     function testWrongSender() public {
         address simpleAccount = address(new SimpleAccount(entryPoint));
         UserOperation[] memory userOps = new UserOperation[](1);
-        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(
-            NSDToken.transferWithFee.selector,
+            AAERC20Paymaster.transferWithFee.selector,
             alice,
             bob,
             10
@@ -308,7 +308,7 @@ contract NSDTokenTest is Test {
             abi.encodeWithSelector(
                 FailedOp.selector, 
                 0, 
-                "AA33 reverted: NSDToken: only NSDToken can call paymaster"
+                "AA33 reverted: AA-ERC20: only AA-ERC20 Paymaster can call paymaster"
             )
         );
         entryPoint.handleOps(userOps, payable(owner));
@@ -316,16 +316,16 @@ contract NSDTokenTest is Test {
 
     function testWrongCalldataSelector() public {
         UserOperation[] memory userOps = new UserOperation[](1);
-        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(
-            nsdToken.transferFrom.selector,
+            aaERC20Paymaster.transferFrom.selector,
             alice,
             bob,
             10
         );
 
         userOps[0] = UserOperation({
-            sender: address(nsdToken),
+            sender: address(aaERC20Paymaster),
             nonce: uint256(0),
             initCode: '',
             callData: callData,
@@ -354,18 +354,18 @@ contract NSDTokenTest is Test {
         entryPoint.handleOps(userOps, payable(owner));
     }
 
-    function testInsufficientNSDToken() public {
+    function testInsufficientAAERC20() public {
         UserOperation[] memory userOps = new UserOperation[](1);
-        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(
-            nsdToken.transferWithFee.selector,
+            aaERC20Paymaster.transferWithFee.selector,
             bob,
             alice,
             10
         );
 
         userOps[0] = UserOperation({
-            sender: address(nsdToken),
+            sender: address(aaERC20Paymaster),
             nonce: uint256(0),
             initCode: '',
             callData: callData,
@@ -388,7 +388,7 @@ contract NSDTokenTest is Test {
             abi.encodeWithSelector(
                 FailedOp.selector, 
                 0, 
-                "AA33 reverted: NSDToken : insufficient balance"
+                "AA33 reverted: AA-ERC20 : insufficient balance"
             )
         );
         entryPoint.handleOps(userOps, payable(owner));
@@ -396,16 +396,16 @@ contract NSDTokenTest is Test {
 
     function testInsufficientFee() public {
         UserOperation[] memory userOps = new UserOperation[](1);
-        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(
-            NSDToken.transferWithFee.selector,
+            AAERC20Paymaster.transferWithFee.selector,
             alice,
             bob,
             100
         );
 
         userOps[0] = UserOperation({
-            sender: address(nsdToken),
+            sender: address(aaERC20Paymaster),
             nonce: uint256(0),
             initCode: '',
             callData: callData,
@@ -428,7 +428,7 @@ contract NSDTokenTest is Test {
             abi.encodeWithSelector(
                 FailedOp.selector, 
                 0, 
-                "AA33 reverted: NSDToken : insufficient balance"
+                "AA33 reverted: AA-ERC20 : insufficient balance"
             )
         );
         entryPoint.handleOps(userOps, payable(owner));
@@ -442,20 +442,20 @@ contract NSDTokenTest is Test {
         console2.log("simpleAccountImpl", simpleAccountImpl);
 
         address account = address(new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice)));
-        nsdToken.transfer(account, 20);
+        aaERC20Paymaster.transfer(account, 20);
         vm.stopPrank();
 
         UserOperation[] memory userOps = new UserOperation[](1);
-        bytes memory paymasterAndData = abi.encodePacked(address(nsdToken));
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(
-            NSDToken.transferWithFee.selector,
+            AAERC20Paymaster.transferWithFee.selector,
             account,
             bob,
             10
         );
 
         userOps[0] = UserOperation({
-            sender: address(nsdToken),
+            sender: address(aaERC20Paymaster),
             nonce: uint256(0),
             initCode: '',
             callData: callData,
