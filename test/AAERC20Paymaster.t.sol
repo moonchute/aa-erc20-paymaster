@@ -10,6 +10,8 @@ import {SimpleAccountFactory} from "account-abstraction/samples/SimpleAccountFac
 
 import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import {ECDSA} from "solady/utils/ECDSA.sol";
@@ -408,5 +410,51 @@ contract AAERC20PaymasterTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(FailedOp.selector, 0, "AA24 signature error"));
         entryPoint.handleOps(userOps, payable(owner));
+    }
+
+    function testERC20Paymaster() public {
+        vm.startPrank(alice);
+        address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
+        address account = address(
+            new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
+        );
+        erc20.transfer(account, 20);
+        aaERC20Paymaster.transfer(account, 20);
+        
+        vm.stopPrank();
+        uint256 beforeBalanceAccount = erc20.balanceOf(account);
+        uint256 beforeBalanceBob = erc20.balanceOf(bob);
+
+        UserOperation[] memory userOps = new UserOperation[](1);
+        bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
+        bytes memory transferCallData = abi.encodeWithSelector(IERC20.transfer.selector, bob, 10);
+        bytes memory callData = abi.encodeWithSelector(SimpleAccount.execute.selector, address(erc20), 0, transferCallData);
+
+        userOps[0] = UserOperation({
+            sender: account,
+            nonce: uint256(0),
+            initCode: "",
+            callData: callData,
+            callGasLimit: 100000,
+            verificationGasLimit: 100000,
+            preVerificationGas: 100000,
+            maxFeePerGas: 172676895612,
+            maxPriorityFeePerGas: 46047172163,
+            paymasterAndData: paymasterAndData,
+            signature: "0x"
+        });
+        // sign
+        bytes32 userOpHash = entryPoint.getUserOpHash(userOps[0]);
+        bytes32 signMessage = ECDSA.toEthSignedMessageHash(userOpHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(aliceKey, signMessage);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        userOps[0].signature = signature;
+        
+        entryPoint.handleOps(userOps, payable(owner));
+        uint256 afterBalanceAccount = erc20.balanceOf(account);
+        uint256 afterBalanceBob = erc20.balanceOf(bob);
+
+        assertEq(beforeBalanceAccount - afterBalanceAccount, 10);
+        assertEq(afterBalanceBob - beforeBalanceBob, 10);
     }
 }

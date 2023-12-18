@@ -14,7 +14,6 @@ import {ECDSA} from "solady/utils/ECDSA.sol";
 
 import {IOracle} from "./interface/IOracle.sol";
 import {AAERC20} from "./AAERC20.sol";
-import "forge-std/console.sol";
 
 contract AAERC20Paymaster is IAccount, BasePaymaster, AAERC20 {
     uint256 public constant PRICE_DENOMINATOR = 1e6;
