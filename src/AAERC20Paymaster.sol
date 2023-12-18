@@ -14,17 +14,16 @@ import {ECDSA} from "solady/utils/ECDSA.sol";
 
 import {IOracle} from "./interface/IOracle.sol";
 import {AAERC20} from "./AAERC20.sol";
+import "forge-std/console.sol";
 
 contract AAERC20Paymaster is IAccount, BasePaymaster, AAERC20 {
     uint256 public constant PRICE_DENOMINATOR = 1e6;
     uint256 public constant REFUND_POSTOP_COST = 40000;
     uint256 public constant PRICE_MARKUP = 110e4;
     uint256 internal constant SIG_VALIDATION_FAILED = 1;
-    uint256 public immutable tokenDecimals;
     uint192 public previousPrice;
 
     // IEntryPoint immutable entryPoint;
-    address immutable token;
     IOracle immutable tokenOracle;
     IOracle immutable nativeOracle;
 
@@ -34,25 +33,13 @@ contract AAERC20Paymaster is IAccount, BasePaymaster, AAERC20 {
         IOracle _tokenoOracle,
         IOracle _nativeOracle,
         address _owner
-    ) BasePaymaster(_entryPoint) {
-        token = address(_token);
+    ) AAERC20(_token) BasePaymaster(_entryPoint) {
         tokenOracle = _tokenoOracle;
         nativeOracle = _nativeOracle;
-        tokenDecimals = 10 ** _token.decimals();
         _transferOwnership(_owner);
     }
 
-    function mint(address to, uint256 amount) external {
-        IERC20(token).transferFrom(to, address(this), amount);
-        _mint(to, amount);
-    }
-
-    function burn(address to, uint256 amount) external {
-        _burn(msg.sender, amount);
-        IERC20(token).transfer(to, amount);
-    }
-
-    function withdrawNSDToken(address to, uint256 amount) public onlyOwner {
+    function withdrawAAERC20Token(address to, uint256 amount) public onlyOwner {
         _transfer(address(this), to, amount);
     }
 
@@ -94,7 +81,8 @@ contract AAERC20Paymaster is IAccount, BasePaymaster, AAERC20 {
         bytes4 selector = bytes4(userOp.callData[0:4]);
         (address from,,) = abi.decode(userOp.callData[4:], (address, address, uint256));
 
-        // transferWithFee(address,address,uint256)
+        /// @dev 0xf3408110: transferWithFee(address,address,uint256)
+        ///      0xea37cb54: burnWithFee(address from, address to, uint256 amount)
         if (selector != bytes4(0xf3408110) && selector != bytes4(0xea37cb54)) {
             return SIG_VALIDATION_FAILED;
         }
@@ -118,8 +106,8 @@ contract AAERC20Paymaster is IAccount, BasePaymaster, AAERC20 {
         override
         returns (bytes memory context, uint256 validationData)
     {
-        require(userOp.sender == address(this), "AA-ERC20: only AA-ERC20 Paymaster can call paymaster");
-        (address from,, uint256 amount) = abi.decode(userOp.callData[4:], (address, address, uint256));
+        address sender =
+            userOp.sender == address(this) ? address(uint160(uint256(bytes32(userOp.callData[4:36])))) : userOp.sender;
 
         unchecked {
             uint256 cachedPrice = previousPrice;
@@ -128,8 +116,8 @@ contract AAERC20Paymaster is IAccount, BasePaymaster, AAERC20 {
             uint256 tokenAmount = (requiredPreFund + (REFUND_POSTOP_COST) * userOp.maxFeePerGas) * PRICE_MARKUP
                 * cachedPrice / (PRICE_DENOMINATOR * 1e18);
 
-            require(tokenAmount + amount <= balanceOf[from], "AA-ERC20 : insufficient balance");
-            _transfer(from, address(this), tokenAmount);
+            require(tokenAmount <= balanceOf[sender], "AA-ERC20 : insufficient balance");
+            _transfer(sender, address(this), tokenAmount);
 
             validationData = 0;
         }

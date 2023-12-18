@@ -1,18 +1,34 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.23;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 contract AAERC20 is IERC20 {
     string public constant name = "AA ERC20";
     string public constant symbol = "AAERC20";
 
-    uint8 public constant decimals = 18;
+    address public immutable token;
+    uint256 public immutable tokenDecimals;
+
     uint256 public totalSupply;
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
-    constructor() {}
+    constructor(IERC20Metadata _token) {
+        token = address(_token);
+        tokenDecimals = 10 ** _token.decimals();
+    }
+
+    function mint(address to, uint256 amount) external {
+        IERC20(token).transferFrom(to, address(this), amount);
+        _mint(to, amount);
+    }
+
+    function burn(address to, uint256 amount) external {
+        _burn(msg.sender, amount);
+        IERC20(token).transfer(to, amount);
+    }
 
     function _mint(address to, uint256 value) internal {
         balanceOf[to] += value;

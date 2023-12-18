@@ -273,11 +273,7 @@ contract AAERC20PaymasterTest is Test {
         bytes memory signature = abi.encodePacked(r, s, v);
         userOps[0].signature = signature;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                FailedOp.selector, 0, "AA33 reverted: AA-ERC20: only AA-ERC20 Paymaster can call paymaster"
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(FailedOp.selector, 0, "AA33 reverted: AA-ERC20 : insufficient balance"));
         entryPoint.handleOps(userOps, payable(owner));
     }
 
@@ -344,6 +340,9 @@ contract AAERC20PaymasterTest is Test {
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 100);
 
+        uint256 beforeBalanceAlice = erc20.balanceOf(alice);
+        uint256 beforeBalanceBob = erc20.balanceOf(bob);
+
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
             nonce: uint256(0),
@@ -364,8 +363,11 @@ contract AAERC20PaymasterTest is Test {
         bytes memory signature = abi.encodePacked(r, s, v);
         userOps[0].signature = signature;
 
-        vm.expectRevert(abi.encodeWithSelector(FailedOp.selector, 0, "AA33 reverted: AA-ERC20 : insufficient balance"));
         entryPoint.handleOps(userOps, payable(owner));
+        uint256 afterBalanceAlice = erc20.balanceOf(alice);
+        uint256 afterBalanceBob = erc20.balanceOf(bob);
+        assertEq(beforeBalanceAlice - afterBalanceAlice, 0);
+        assertEq(afterBalanceBob - beforeBalanceBob, 0);
     }
 
     function testSmartAccountInvalidSignature() public {
@@ -373,7 +375,6 @@ contract AAERC20PaymasterTest is Test {
         // SimpleAccountFactory factory = new SimpleAccountFactory(entryPoint);
         // address account = address(factory.createAccount(owner, 0));
         address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
-        console2.log("simpleAccountImpl", simpleAccountImpl);
 
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
