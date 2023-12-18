@@ -41,9 +41,10 @@ contract AAERC20PaymasterTest is Test {
         IOracle tokenOracle = IOracle(address(bytes20(keccak256("tokenOracle"))));
         IOracle nativeOracle = IOracle(address(bytes20(keccak256("nativeOracle"))));
         vm.startPrank(owner);
-        aaERC20Paymaster = new AAERC20Paymaster(entryPoint, IERC20Metadata(address(erc20)), tokenOracle, nativeOracle, owner);
-        
-        // update Oracle price 
+        aaERC20Paymaster =
+            new AAERC20Paymaster(entryPoint, IERC20Metadata(address(erc20)), tokenOracle, nativeOracle, owner);
+
+        // update Oracle price
         vm.store(address(aaERC20Paymaster), bytes32(uint256(4)), bytes32(uint256(10)));
 
         // deposit paymaster
@@ -74,17 +75,12 @@ contract AAERC20PaymasterTest is Test {
     function testTransferAAERC20UserOp() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(
-            AAERC20Paymaster.transferWithFee.selector,
-            alice,
-            bob,
-            10
-        );
+        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 10);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
             nonce: uint256(0),
-            initCode: '',
+            initCode: "",
             callData: callData,
             callGasLimit: 100000,
             verificationGasLimit: 100000,
@@ -111,23 +107,20 @@ contract AAERC20PaymasterTest is Test {
     function testTransferAAERC20UserOpFromSmartAccount() public {
         vm.startPrank(alice);
         address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
-        address account = address(new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice)));
+        address account = address(
+            new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
+        );
         aaERC20Paymaster.transfer(account, 20);
         vm.stopPrank();
 
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(
-            AAERC20Paymaster.transferWithFee.selector,
-            account,
-            bob,
-            10
-        );
+        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, account, bob, 10);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
             nonce: uint256(0),
-            initCode: '',
+            initCode: "",
             callData: callData,
             callGasLimit: 100000,
             verificationGasLimit: 100000,
@@ -154,18 +147,13 @@ contract AAERC20PaymasterTest is Test {
     function testBurnAAERC20UserOp() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(
-            AAERC20Paymaster.burnWithFee.selector,
-            alice,
-            bob,
-            10
-        );
+        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.burnWithFee.selector, alice, bob, 10);
         uint256 beforeErc20 = erc20.balanceOf(bob);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
             nonce: uint256(0),
-            initCode: '',
+            initCode: "",
             callData: callData,
             callGasLimit: 100000,
             verificationGasLimit: 100000,
@@ -193,23 +181,20 @@ contract AAERC20PaymasterTest is Test {
     function testBurnAAERC20UserOpFromSmartAccount() public {
         vm.startPrank(alice);
         address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
-        address account = address(new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice)));
+        address account = address(
+            new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
+        );
         aaERC20Paymaster.transfer(account, 20);
         vm.stopPrank();
 
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(
-            AAERC20Paymaster.burnWithFee.selector,
-            account,
-            bob,
-            10
-        );
+        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.burnWithFee.selector, account, bob, 10);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
             nonce: uint256(0),
-            initCode: '',
+            initCode: "",
             callData: callData,
             callGasLimit: 100000,
             verificationGasLimit: 100000,
@@ -236,17 +221,12 @@ contract AAERC20PaymasterTest is Test {
     function testInvalidSignature() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(
-            AAERC20Paymaster.transferWithFee.selector,
-            alice,
-            bob,
-            10
-        );
+        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 10);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
             nonce: uint256(0),
-            initCode: '',
+            initCode: "",
             callData: callData,
             callGasLimit: 100000,
             verificationGasLimit: 100000,
@@ -263,13 +243,7 @@ contract AAERC20PaymasterTest is Test {
         bytes memory signature = abi.encodePacked(r, s, v);
         userOps[0].signature = signature;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                FailedOp.selector, 
-                0, 
-                "AA24 signature error"
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(FailedOp.selector, 0, "AA24 signature error"));
         entryPoint.handleOps(userOps, payable(owner));
     }
 
@@ -277,17 +251,12 @@ contract AAERC20PaymasterTest is Test {
         address simpleAccount = address(new SimpleAccount(entryPoint));
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(
-            AAERC20Paymaster.transferWithFee.selector,
-            alice,
-            bob,
-            10
-        );
+        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 10);
 
         userOps[0] = UserOperation({
             sender: simpleAccount,
             nonce: uint256(0),
-            initCode: '',
+            initCode: "",
             callData: callData,
             callGasLimit: 100000,
             verificationGasLimit: 100000,
@@ -306,9 +275,7 @@ contract AAERC20PaymasterTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                FailedOp.selector, 
-                0, 
-                "AA33 reverted: AA-ERC20: only AA-ERC20 Paymaster can call paymaster"
+                FailedOp.selector, 0, "AA33 reverted: AA-ERC20: only AA-ERC20 Paymaster can call paymaster"
             )
         );
         entryPoint.handleOps(userOps, payable(owner));
@@ -317,17 +284,12 @@ contract AAERC20PaymasterTest is Test {
     function testWrongCalldataSelector() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(
-            aaERC20Paymaster.transferFrom.selector,
-            alice,
-            bob,
-            10
-        );
+        bytes memory callData = abi.encodeWithSelector(aaERC20Paymaster.transferFrom.selector, alice, bob, 10);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
             nonce: uint256(0),
-            initCode: '',
+            initCode: "",
             callData: callData,
             callGasLimit: 100000,
             verificationGasLimit: 100000,
@@ -344,30 +306,19 @@ contract AAERC20PaymasterTest is Test {
         bytes memory signature = abi.encodePacked(r, s, v);
         userOps[0].signature = signature;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                FailedOp.selector, 
-                0, 
-                "AA24 signature error"
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(FailedOp.selector, 0, "AA24 signature error"));
         entryPoint.handleOps(userOps, payable(owner));
     }
 
     function testInsufficientAAERC20() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(
-            aaERC20Paymaster.transferWithFee.selector,
-            bob,
-            alice,
-            10
-        );
+        bytes memory callData = abi.encodeWithSelector(aaERC20Paymaster.transferWithFee.selector, bob, alice, 10);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
             nonce: uint256(0),
-            initCode: '',
+            initCode: "",
             callData: callData,
             callGasLimit: 100000,
             verificationGasLimit: 100000,
@@ -384,30 +335,19 @@ contract AAERC20PaymasterTest is Test {
         bytes memory signature = abi.encodePacked(r, s, v);
         userOps[0].signature = signature;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                FailedOp.selector, 
-                0, 
-                "AA33 reverted: AA-ERC20 : insufficient balance"
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(FailedOp.selector, 0, "AA33 reverted: AA-ERC20 : insufficient balance"));
         entryPoint.handleOps(userOps, payable(owner));
     }
 
     function testInsufficientFee() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(
-            AAERC20Paymaster.transferWithFee.selector,
-            alice,
-            bob,
-            100
-        );
+        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 100);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
             nonce: uint256(0),
-            initCode: '',
+            initCode: "",
             callData: callData,
             callGasLimit: 100000,
             verificationGasLimit: 100000,
@@ -424,13 +364,7 @@ contract AAERC20PaymasterTest is Test {
         bytes memory signature = abi.encodePacked(r, s, v);
         userOps[0].signature = signature;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                FailedOp.selector, 
-                0, 
-                "AA33 reverted: AA-ERC20 : insufficient balance"
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(FailedOp.selector, 0, "AA33 reverted: AA-ERC20 : insufficient balance"));
         entryPoint.handleOps(userOps, payable(owner));
     }
 
@@ -441,23 +375,20 @@ contract AAERC20PaymasterTest is Test {
         address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
         console2.log("simpleAccountImpl", simpleAccountImpl);
 
-        address account = address(new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice)));
+        address account = address(
+            new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
+        );
         aaERC20Paymaster.transfer(account, 20);
         vm.stopPrank();
 
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(
-            AAERC20Paymaster.transferWithFee.selector,
-            account,
-            bob,
-            10
-        );
+        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, account, bob, 10);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
             nonce: uint256(0),
-            initCode: '',
+            initCode: "",
             callData: callData,
             callGasLimit: 100000,
             verificationGasLimit: 100000,
@@ -474,13 +405,7 @@ contract AAERC20PaymasterTest is Test {
         bytes memory signature = abi.encodePacked(r, s, v);
         userOps[0].signature = signature;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                FailedOp.selector, 
-                0, 
-                "AA24 signature error"
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(FailedOp.selector, 0, "AA24 signature error"));
         entryPoint.handleOps(userOps, payable(owner));
     }
 }

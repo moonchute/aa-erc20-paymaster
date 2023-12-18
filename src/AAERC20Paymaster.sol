@@ -29,10 +29,10 @@ contract AAERC20Paymaster is IAccount, BasePaymaster, AAERC20 {
     IOracle immutable nativeOracle;
 
     constructor(
-        IEntryPoint _entryPoint, 
-        IERC20Metadata _token, 
-        IOracle _tokenoOracle, 
-        IOracle _nativeOracle, 
+        IEntryPoint _entryPoint,
+        IERC20Metadata _token,
+        IOracle _tokenoOracle,
+        IOracle _nativeOracle,
         address _owner
     ) BasePaymaster(_entryPoint) {
         token = address(_token);
@@ -84,11 +84,12 @@ contract AAERC20Paymaster is IAccount, BasePaymaster, AAERC20 {
         previousPrice = nativeAssetPrice * uint192(tokenDecimals) / tokenPrice;
     }
 
-    function validateUserOp(
-        UserOperation calldata userOp,
-        bytes32 userOpHash,
-        uint256
-    ) external virtual override returns (uint256 validationData) {
+    function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256)
+        external
+        virtual
+        override
+        returns (uint256 validationData)
+    {
         _requireFromEntryPoint();
         bytes4 selector = bytes4(userOp.callData[0:4]);
         (address from,,) = abi.decode(userOp.callData[4:], (address, address, uint256));
@@ -107,26 +108,26 @@ contract AAERC20Paymaster is IAccount, BasePaymaster, AAERC20 {
 
             if (signer != from) {
                 return SIG_VALIDATION_FAILED;
-            } 
+            }
             return 0;
         }
     }
 
-    function _validatePaymasterUserOp(
-        UserOperation calldata userOp,
-        bytes32 userOpHash,
-        uint256 requiredPreFund
-    ) internal override returns (bytes memory context, uint256 validationData) {
+    function _validatePaymasterUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 requiredPreFund)
+        internal
+        override
+        returns (bytes memory context, uint256 validationData)
+    {
         require(userOp.sender == address(this), "AA-ERC20: only AA-ERC20 Paymaster can call paymaster");
         (address from,, uint256 amount) = abi.decode(userOp.callData[4:], (address, address, uint256));
 
         unchecked {
             uint256 cachedPrice = previousPrice;
             require(cachedPrice != 0, "AA-ERC20 : price not set");
-            
+
             uint256 tokenAmount = (requiredPreFund + (REFUND_POSTOP_COST) * userOp.maxFeePerGas) * PRICE_MARKUP
-              * cachedPrice / (PRICE_DENOMINATOR * 1e18);
-            
+                * cachedPrice / (PRICE_DENOMINATOR * 1e18);
+
             require(tokenAmount + amount <= balanceOf[from], "AA-ERC20 : insufficient balance");
             _transfer(from, address(this), tokenAmount);
 
