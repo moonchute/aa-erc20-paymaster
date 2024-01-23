@@ -17,7 +17,8 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
 import {AAERC20Paymaster} from "../src/AAERC20Paymaster.sol";
-import {IOracle} from "../src/interface/IOracle.sol";
+import {IPaymasterOracle} from "../src/interfaces/IPaymasterOracle.sol";
+import {IPaymasterSwap} from "../src/interfaces/IPaymasterSwap.sol";
 import {TestERC20} from "../src/test/TestERC20.sol";
 import {TestSimpleAccount} from "../src/test/TestSimpleAccount.sol";
 import "forge-std/console2.sol";
@@ -40,20 +41,35 @@ contract AAERC20PaymasterTest is Test {
         (bob, bobKey) = makeAddrAndKey("bob");
         entryPoint = new EntryPoint();
         erc20 = new TestERC20();
-        IOracle tokenOracle = IOracle(address(bytes20(keccak256("tokenOracle"))));
-        IOracle nativeOracle = IOracle(address(bytes20(keccak256("nativeOracle"))));
+
+        // mock oracle and swap
+        IPaymasterOracle oracle = IPaymasterOracle(address(bytes20(keccak256("paymasterOracle"))));
+        IPaymasterSwap swap = IPaymasterSwap(address(bytes20(keccak256("paymasterSwap"))));
+        vm.mockCall(
+            address(oracle), 
+            abi.encodeWithSelector(IPaymasterOracle.enable.selector),
+            abi.encode(address(0))
+        );
+        vm.mockCall(
+            address(swap), 
+            abi.encodeWithSelector(IPaymasterSwap.enable.selector),
+            abi.encode(address(0))
+        );
+        vm.mockCall(
+            address(oracle), 
+            abi.encodeWithSelector(IPaymasterOracle.getPrice.selector),
+            abi.encode(uint256(1), int24(100))
+        );
+
         vm.startPrank(owner);
         aaERC20Paymaster =
-            new AAERC20Paymaster(entryPoint, IERC20Metadata(address(erc20)), tokenOracle, nativeOracle, owner);
-
-        // update Oracle price
-        vm.store(address(aaERC20Paymaster), bytes32(uint256(6)), bytes32(uint256(10)));
+            new AAERC20Paymaster(entryPoint, IERC20Metadata(address(erc20)), oracle, swap, owner);
 
         // deposit paymaster
         deal(owner, 100 ether);
         aaERC20Paymaster.deposit{value: 10 ether}();
         vm.stopPrank();
-        // erc20 token
+        // // erc20 token
         vm.startPrank(alice);
         erc20.mint(alice, 1000);
         erc20.approve(address(aaERC20Paymaster), 100);
@@ -85,7 +101,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 100000,
+            verificationGasLimit: 500000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -158,7 +174,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 100000,
+            verificationGasLimit: 500000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -199,7 +215,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 100000,
+            verificationGasLimit: 500000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -231,7 +247,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 100000,
+            verificationGasLimit: 500000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -261,7 +277,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 100000,
+            verificationGasLimit: 500000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -290,7 +306,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 100000,
+            verificationGasLimit: 500000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -319,7 +335,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 100000,
+            verificationGasLimit: 500000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -351,7 +367,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 100000,
+            verificationGasLimit: 500000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -394,7 +410,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 100000,
+            verificationGasLimit: 500000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -436,7 +452,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 100000,
+            verificationGasLimit: 500000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
