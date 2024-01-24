@@ -3,11 +3,11 @@ pragma solidity >=0.7.0;
 
 interface IPaymasterOracle {
 
-  function enable(bytes calldata data) external;
+  function enable(address) external;
 
   function disable() external;
 
-  function getTick(address from) external view returns (int24);
+  function getTick(address) external view returns (int24);
 
-  function getPrice(address from, uint128 amount) external returns (uint256, int24);
+  function getPrice(address, uint128) external returns (uint256, int24);
 }

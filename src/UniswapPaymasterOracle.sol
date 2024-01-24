@@ -22,10 +22,8 @@ contract UniswapPaymasterOracle is IPaymasterOracle {
   event EnableOracle(address indexed sender, address indexed pool);
   event DisableOracle(address indexed sender);
 
-  function enable(bytes calldata data) public override {
-    (address token0) = abi.decode(data, (address));
+  function enable(address token0) public override {
     address pool = IUniswapV3Factory(factory).getPool(token0, nativeToken, fee);
-    console.log("pool:", pool);
     pools[msg.sender] = pool;
     emit EnableOracle(msg.sender, pool);
   }

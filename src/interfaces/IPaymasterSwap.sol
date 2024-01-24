@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.7.0;
+pragma solidity 0.8.23;
 
 interface IPaymasterSwap {
-  function enable(bytes calldata data) external;
+  function enable(address) external;
 
   function disable() external;
 
-  function swap(uint128 amount) external returns (uint256);
+  function swap(uint128) external returns (uint256);
 }

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.5.0 <0.8.0;
-pragma abicoder v2;
+pragma solidity 0.8.23;
 
-import {IUniswapV3Factory} from "v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import {IPaymasterSwap} from "src/interfaces/IPaymasterSwap.sol";
 import {ISwapRouter} from "v3-periphery/interfaces/ISwapRouter.sol";
 import {IERC20Minimal} from "v3-core/contracts/interfaces/IERC20Minimal.sol";
@@ -32,10 +30,7 @@ contract UniswapPaymasterSwap is IPaymasterSwap {
     fee = _fee;
   }
 
-  function enable(bytes calldata data) public override {
-    (address token0) = abi.decode(data, (address));
-    
-    address pool = IUniswapV3Factory(uniswapFactory).getPool(token0, nativeToken, fee);
+  function enable(address token0) public override {
     if (IERC20Minimal(token0).allowance(address(this), swapRouter) == 0) {
       IERC20Minimal(token0).approve(swapRouter, type(uint256).max);
     }
@@ -56,8 +51,8 @@ contract UniswapPaymasterSwap is IPaymasterSwap {
     Pool memory pool = pools[msg.sender];
     uint256 amountOut = ISwapRouter(swapRouter).exactInputSingle(
       ISwapRouter.ExactInputSingleParams({
-        tokenIn: pool.token1,
-        tokenOut: pool.token0,
+        tokenIn: pool.token0,
+        tokenOut: pool.token1,
         fee: pool.fee,
         recipient: msg.sender,
         deadline: block.timestamp + 10000,
@@ -66,7 +61,6 @@ contract UniswapPaymasterSwap is IPaymasterSwap {
         sqrtPriceLimitX96: 0
       })
     );
-    console.log("amountOut:", amountOut);
     return amountOut;
   }
 }
