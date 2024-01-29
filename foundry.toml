@@ -5,5 +5,6 @@ libs = ["lib"]
 
 [rpc_endpoints]
 anvil = "${ANVIL_RPC_URL}"
+polygon = "${POLYGON_RPC_URL}"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

@@ -1,9 +1,8 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "forge-std/console.sol";
 
 contract AAERC20 is IERC20 {
     address public immutable token;
@@ -19,7 +18,7 @@ contract AAERC20 is IERC20 {
     constructor(IERC20Metadata _token) {
         token = address(_token);
         name = string.concat("AA-", _token.name());
-        symbol = string.concat("AA-" , _token.symbol());
+        symbol = string.concat("AA-", _token.symbol());
         tokenDecimals = 10 ** _token.decimals();
     }
 

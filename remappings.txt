@@ -1,3 +1,4 @@
 account-abstraction/=lib/account-abstraction/contracts/
 solady/=lib/solady/src/
 @openzeppelin/=lib/openzeppelin-contracts/
+@uniswap/v3-core/=lib/v3-core/
