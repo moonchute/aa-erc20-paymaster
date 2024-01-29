@@ -18,7 +18,7 @@ import {AAERC20} from "./AAERC20.sol";
 import "forge-std/console.sol";
 
 contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
-    uint256 public constant REFUND_POSTOP_COST = 40000;
+    uint256 public constant REFUND_POSTOP_COST = 41200;
     uint256 internal constant SIG_VALIDATION_FAILED = 1;
 
     // protocol parameter in basis
@@ -28,13 +28,14 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
     uint256 public constant LIQUIDATOR_THRESHOLD = 700;
 
     uint256 public minDepositAmount = 1 ether;
+    uint256 public override currentPrice;
 
     IWETH public immutable override nativeToken;
     IPaymasterOracle public immutable override oracle;
     IPaymasterSwap public immutable override swap;
 
-    mapping(uint256 => uint256) public accumulatedFee;
-    mapping(address => uint256) public accumulatedLiquidateFee;
+    mapping(uint256 => uint256) public override accumulatedFee;
+    mapping(address => uint256) public override accumulatedLiquidateFee;
 
     constructor(
         IEntryPoint _entryPoint,
@@ -150,9 +151,10 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
                 (requiredPreFund + (REFUND_POSTOP_COST) * userOp.maxFeePerGas) * (PRICE_MARKUP + 10000) / 10000;
 
             uint256 tokenAmount = oracle.getPrice(address(this), uint128(feeAmount));
-            uint256 currentPrice = (tokenAmount * 1 ether / feeAmount);
-            uint256 feeRange = currentPrice * PRICE_MARKUP / 10000;
-            uint256 feePrice = (currentPrice - 1) / feeRange * feeRange;
+            uint256 price = (tokenAmount * 1 ether / feeAmount);
+            uint256 feeRange = price * PRICE_MARKUP / 10000;
+            uint256 feePrice = (price - 1) / feeRange * feeRange;
+            currentPrice = price;
 
             require(tokenAmount <= balanceOf[sender], "AA-ERC20 : insufficient balance");
 
@@ -161,6 +163,27 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
             _transfer(sender, address(this), tokenAmount);
 
             validationData = 0;
+            context = abi.encodePacked(price, sender);
+        }
+    }
+
+    /// inheritdoc BasePaymaster
+    function _postOp(PostOpMode mode, bytes calldata context, uint256 actualGasCost) internal override {
+        if (mode == PostOpMode.postOpReverted) {
+            return;
+        }
+
+        unchecked {
+            uint256 actualTokenNeeded = (actualGasCost + REFUND_POSTOP_COST * tx.gasprice) * (PRICE_MARKUP + 10000) / 10000;
+
+            if (uint256(bytes32(context[0:32])) > actualTokenNeeded) {
+                uint256 refund = uint256(bytes32(context[0:32])) - actualTokenNeeded;
+                uint256 feeRange = currentPrice * PRICE_MARKUP / 10000;
+                uint256 feePrice = (currentPrice - 1) / feeRange * feeRange;
+
+                _transfer(address(this), address(bytes20(context[32:52])), refund);
+                accumulatedFee[feePrice] -= refund;
+            }
         }
     }
 
