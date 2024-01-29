@@ -31,13 +31,8 @@ interface IAAERC20Factory {
      * @param _swap The address of the swap.
      * @param _owner The address of the owner.
      */
-    function createAAERC20(
-        address _entryPoint,
-        address _token,
-        address _oracle,
-        address _swap,
-        address _owner
-    ) external;
+    function createAAERC20(address _entryPoint, address _token, address _oracle, address _swap, address _owner)
+        external;
 
     /**
      * @dev Sets the owner.

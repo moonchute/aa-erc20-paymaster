@@ -26,13 +26,10 @@ contract AAERC20Factory is IAAERC20Factory {
     }
 
     /// @inheritdoc IAAERC20Factory
-    function createAAERC20(
-        address _entryPoint,
-        address _token,
-        address _oracle,
-        address _swap,
-        address _owner
-    ) external override {
+    function createAAERC20(address _entryPoint, address _token, address _oracle, address _swap, address _owner)
+        external
+        override
+    {
         require(getAAErc20[_token][_oracle][_swap][_entryPoint] == address(0), "AAERC20Factory: already created");
 
         bytes32 salt = keccak256(abi.encodePacked(_token, _oracle, _swap, _entryPoint));

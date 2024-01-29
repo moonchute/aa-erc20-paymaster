@@ -10,7 +10,6 @@ import {IWETH} from "./IWETH.sol";
  * @title The interface for the AAERC20 Paymaster.
  */
 interface IAAERC20Paymaster is IAccount {
-
     /**
      * @dev Get the current price
      * @return price The current price

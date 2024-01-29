@@ -5,10 +5,12 @@ import {Test} from "forge-std/Test.sol";
 import {UniswapPaymasterSwap} from "src/swap/UniswapPaymasterSwap.sol";
 import {IUniswapV3Pool} from "v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IERC20Minimal} from "v3-core/contracts/interfaces/IERC20Minimal.sol";
+import {ISwapRouter} from "v3-periphery/interfaces/ISwapRouter.sol";
 
 contract UniswapPaymasterSwapTest is Test {
-    UniswapPaymasterSwap paymasterSwap;
-    address owner;
+    UniswapPaymasterSwap public paymasterSwap;
+    address public owner;
+    address public router;
 
     function setUp() public {
         string memory rpcId = vm.envString("POLYGON_RPC_URL");
@@ -17,8 +19,7 @@ contract UniswapPaymasterSwapTest is Test {
         owner = makeAddr("owner");
 
         // Uniswap SwapRouter
-        address router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
-
+        router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
         // WMATIC
         address token0 = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
         // USDC
@@ -33,7 +34,13 @@ contract UniswapPaymasterSwapTest is Test {
     }
 
     function testCanSwap() public {
+        // WMATIC/USDC 1% pool
+        address pool = 0x0a6c4588b7D8Bd22cF120283B1FFf953420c45F3;
+
         uint128 amount = 10;
-        paymasterSwap.swap(amount);
+        vm.expectCall(router, abi.encodeWithSelector(ISwapRouter.exactInputSingle.selector));
+        vm.expectCall(pool, abi.encodeWithSelector(bytes4(keccak256("swap(address,bool,int256,uint160,bytes)"))));
+        uint256 amountOut = paymasterSwap.swap(amount);
+        assertNotEq(amountOut, 0);
     }
 }

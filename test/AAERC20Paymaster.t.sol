@@ -47,7 +47,7 @@ contract AAERC20PaymasterTest is Test {
             address(oracle), abi.encodeWithSelector(IPaymasterOracle.initialize.selector), abi.encode(address(0))
         );
         vm.mockCall(
-            address(oracle), abi.encodeWithSelector(IPaymasterOracle.getPrice.selector), abi.encode(uint256(1_000))
+            address(oracle), abi.encodeWithSelector(IPaymasterOracle.getPrice.selector), abi.encode(uint256(100_000))
         );
 
         // Uniswap SwapRouter
@@ -70,30 +70,30 @@ contract AAERC20PaymasterTest is Test {
         vm.stopPrank();
         // // erc20 token
         vm.startPrank(alice);
-        deal(address(erc20), alice, 100_000);
-        // erc20.mint(alice, 1000);
-        erc20.approve(address(aaERC20Paymaster), 10_000);
-        aaERC20Paymaster.mint(alice, 10_000);
+        deal(address(erc20), alice, 1 ether);
+        erc20.approve(address(aaERC20Paymaster), 0.1 ether);
+        aaERC20Paymaster.mint(alice, 0.1 ether);
         vm.stopPrank();
     }
 
     function testBeforeMint() public {
-        assertEq(erc20.balanceOf(alice), 90_000);
-        assertEq(erc20.balanceOf(address(aaERC20Paymaster)), 10_000);
-        assertEq(aaERC20Paymaster.balanceOf(alice), 10_000);
+        assertEq(erc20.balanceOf(alice), 0.9 ether);
+        assertEq(erc20.balanceOf(address(aaERC20Paymaster)), 0.1 ether);
+        assertEq(aaERC20Paymaster.balanceOf(alice), 0.1 ether);
     }
 
     function testTransferAAERC20() public {
         vm.prank(alice);
-        aaERC20Paymaster.transfer(bob, 1_000);
-        assertEq(aaERC20Paymaster.balanceOf(alice), 9_000);
-        assertEq(aaERC20Paymaster.balanceOf(bob), 1_000);
+        aaERC20Paymaster.transfer(bob, 0.01 ether);
+        assertEq(aaERC20Paymaster.balanceOf(alice), 0.09 ether);
+        assertEq(aaERC20Paymaster.balanceOf(bob), 0.01 ether);
     }
 
     function testTransferAAERC20UserOp() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 10);
+        bytes memory callData =
+            abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 0.01 ether);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
@@ -101,7 +101,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -117,9 +117,13 @@ contract AAERC20PaymasterTest is Test {
 
         entryPoint.handleOps(userOps, payable(owner));
 
-        assertEq(aaERC20Paymaster.balanceOf(bob), 10);
-        assertEq(aaERC20Paymaster.balanceOf(alice), 8990);
-        assertEq(aaERC20Paymaster.balanceOf(address(aaERC20Paymaster)), 1000);
+        uint256 afterAliceBalance = aaERC20Paymaster.balanceOf(alice);
+        uint256 afterPmBalance = aaERC20Paymaster.balanceOf(address(aaERC20Paymaster));
+        assertEq(aaERC20Paymaster.balanceOf(bob), 0.01 ether);
+        assertEq(afterAliceBalance + afterPmBalance, 0.09 ether);
+        // _postOp refund
+        assertTrue(afterAliceBalance > 0.089 ether);
+        assertTrue(afterPmBalance < 0.001 ether);
     }
 
     function testTransferAAERC20UserOpFromSmartAccount() public {
@@ -128,7 +132,7 @@ contract AAERC20PaymasterTest is Test {
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
         );
-        aaERC20Paymaster.transfer(account, 5_000);
+        aaERC20Paymaster.transfer(account, 0.05 ether);
         vm.stopPrank();
 
         UserOperation[] memory userOps = new UserOperation[](1);
@@ -137,7 +141,7 @@ contract AAERC20PaymasterTest is Test {
             SimpleAccount.execute.selector,
             address(aaERC20Paymaster),
             0,
-            abi.encodeWithSelector(aaERC20Paymaster.transfer.selector, bob, 10)
+            abi.encodeWithSelector(aaERC20Paymaster.transfer.selector, bob, 0.01 ether)
         );
 
         userOps[0] = UserOperation({
@@ -146,7 +150,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -162,15 +166,19 @@ contract AAERC20PaymasterTest is Test {
 
         entryPoint.handleOps(userOps, payable(owner));
 
-        assertEq(aaERC20Paymaster.balanceOf(bob), 10);
-        assertEq(aaERC20Paymaster.balanceOf(account), 3990);
-        assertEq(aaERC20Paymaster.balanceOf(address(aaERC20Paymaster)), 1000);
+        uint256 afterAccountBalance = aaERC20Paymaster.balanceOf(account);
+        uint256 afterPmBalance = aaERC20Paymaster.balanceOf(address(aaERC20Paymaster));
+        assertEq(aaERC20Paymaster.balanceOf(bob), 0.01 ether);
+        assertEq(afterAccountBalance + afterPmBalance, 0.04 ether);
+        // _postOp refund
+        assertTrue(afterAccountBalance > 0.039 ether);
+        assertTrue(afterPmBalance < 0.001 ether);
     }
 
     function testBurnAAERC20UserOp() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.burnWithFee.selector, alice, bob, 10);
+        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.burnWithFee.selector, alice, bob, 0.01 ether);
         uint256 beforeErc20 = erc20.balanceOf(bob);
 
         userOps[0] = UserOperation({
@@ -179,7 +187,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -195,10 +203,14 @@ contract AAERC20PaymasterTest is Test {
 
         entryPoint.handleOps(userOps, payable(owner));
         uint256 afterErc20 = erc20.balanceOf(bob);
+        uint256 afterAliceBalance = aaERC20Paymaster.balanceOf(alice);
+        uint256 afterPmBalance = aaERC20Paymaster.balanceOf(address(aaERC20Paymaster));
 
-        assertEq(afterErc20 - beforeErc20, 10);
-        assertEq(aaERC20Paymaster.balanceOf(alice), 8990);
-        assertEq(aaERC20Paymaster.balanceOf(address(aaERC20Paymaster)), 1000);
+        assertEq(afterErc20 - beforeErc20, 0.01 ether);
+        assertEq(afterAliceBalance + afterPmBalance, 0.09 ether);
+        // _postOp refund
+        assertTrue(afterAliceBalance > 0.089 ether);
+        assertTrue(afterPmBalance < 0.001 ether);
     }
 
     function testBurnAAERC20UserOpFromSmartAccount() public {
@@ -207,7 +219,7 @@ contract AAERC20PaymasterTest is Test {
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
         );
-        aaERC20Paymaster.transfer(account, 5_000);
+        aaERC20Paymaster.transfer(account, 0.05 ether);
         vm.stopPrank();
 
         UserOperation[] memory userOps = new UserOperation[](1);
@@ -216,7 +228,7 @@ contract AAERC20PaymasterTest is Test {
             SimpleAccount.execute.selector,
             address(aaERC20Paymaster),
             0,
-            abi.encodeWithSelector(aaERC20Paymaster.burn.selector, bob, 10)
+            abi.encodeWithSelector(aaERC20Paymaster.burn.selector, bob, 0.01 ether)
         );
 
         userOps[0] = UserOperation({
@@ -225,7 +237,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -240,16 +252,21 @@ contract AAERC20PaymasterTest is Test {
         userOps[0].signature = signature;
 
         entryPoint.handleOps(userOps, payable(owner));
+        uint256 afterAccountBalance = aaERC20Paymaster.balanceOf(account);
+        uint256 afterPmBalance = aaERC20Paymaster.balanceOf(address(aaERC20Paymaster));
 
-        assertEq(erc20.balanceOf(bob), 10);
-        assertEq(aaERC20Paymaster.balanceOf(account), 3990);
-        assertEq(aaERC20Paymaster.balanceOf(address(aaERC20Paymaster)), 1000);
+        assertEq(erc20.balanceOf(bob), 0.01 ether);
+        assertEq(afterAccountBalance + afterPmBalance, 0.04 ether);
+        // _postOp refund
+        assertTrue(afterAccountBalance > 0.039 ether);
+        assertTrue(afterPmBalance < 0.001 ether);
     }
 
     function testInvalidSignature() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 10);
+        bytes memory callData =
+            abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 0.01 ether);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
@@ -257,7 +274,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -279,7 +296,8 @@ contract AAERC20PaymasterTest is Test {
         address simpleAccount = address(new SimpleAccount(entryPoint));
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 10);
+        bytes memory callData =
+            abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 0.01 ether);
 
         userOps[0] = UserOperation({
             sender: simpleAccount,
@@ -287,7 +305,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -308,7 +326,7 @@ contract AAERC20PaymasterTest is Test {
     function testWrongCalldataSelector() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(aaERC20Paymaster.transferFrom.selector, alice, bob, 10);
+        bytes memory callData = abi.encodeWithSelector(aaERC20Paymaster.transferFrom.selector, alice, bob, 0.01 ether);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
@@ -316,7 +334,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -337,7 +355,8 @@ contract AAERC20PaymasterTest is Test {
     function testInsufficientAAERC20() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(aaERC20Paymaster.transferWithFee.selector, bob, alice, 10);
+        bytes memory callData =
+            abi.encodeWithSelector(aaERC20Paymaster.transferWithFee.selector, bob, alice, 0.01 ether);
 
         userOps[0] = UserOperation({
             sender: address(aaERC20Paymaster),
@@ -345,7 +364,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -366,7 +385,8 @@ contract AAERC20PaymasterTest is Test {
     function testInsufficientFee() public {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 100);
+        bytes memory callData =
+            abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, alice, bob, 0.01 ether);
 
         uint256 beforeBalanceAlice = erc20.balanceOf(alice);
         uint256 beforeBalanceBob = erc20.balanceOf(bob);
@@ -377,7 +397,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -405,12 +425,12 @@ contract AAERC20PaymasterTest is Test {
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
         );
-        aaERC20Paymaster.transfer(account, 5000);
+        aaERC20Paymaster.transfer(account, 0.05 ether);
         vm.stopPrank();
 
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(aaERC20Paymaster.transfer.selector, account, bob, 10);
+        bytes memory callData = abi.encodeWithSelector(aaERC20Paymaster.transfer.selector, account, bob, 0.01 ether);
 
         userOps[0] = UserOperation({
             sender: account,
@@ -418,7 +438,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -442,8 +462,8 @@ contract AAERC20PaymasterTest is Test {
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
         );
-        erc20.transfer(account, 5_000);
-        aaERC20Paymaster.transfer(account, 5_000);
+        erc20.transfer(account, 0.05 ether);
+        aaERC20Paymaster.transfer(account, 0.05 ether);
 
         vm.stopPrank();
         uint256 beforeBalanceAccount = erc20.balanceOf(account);
@@ -451,7 +471,7 @@ contract AAERC20PaymasterTest is Test {
 
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory transferCallData = abi.encodeWithSelector(IERC20.transfer.selector, bob, 10);
+        bytes memory transferCallData = abi.encodeWithSelector(IERC20.transfer.selector, bob, 0.01 ether);
         bytes memory callData =
             abi.encodeWithSelector(SimpleAccount.execute.selector, address(erc20), 0, transferCallData);
 
@@ -461,7 +481,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,
@@ -478,9 +498,9 @@ contract AAERC20PaymasterTest is Test {
         entryPoint.handleOps(userOps, payable(owner));
         uint256 afterBalanceAccount = erc20.balanceOf(account);
         uint256 afterBalanceBob = erc20.balanceOf(bob);
-
-        assertEq(beforeBalanceAccount - afterBalanceAccount, 10);
-        assertEq(afterBalanceBob - beforeBalanceBob, 10);
+        
+        assertEq(beforeBalanceAccount - afterBalanceAccount, 0.01 ether);
+        assertEq(afterBalanceBob - beforeBalanceBob, 0.01 ether);
     }
 
     function testLiquidateAddDeposit() external {
@@ -490,21 +510,26 @@ contract AAERC20PaymasterTest is Test {
         uint256 beforeProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
         uint256 beforeLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
 
-        uint256 beforeTickAmount = aaERC20Paymaster.accumulatedFee(3020);
+        uint256 beforeAccAmount = aaERC20Paymaster.accumulatedFee(625850);
+        uint256 beforeDeposit = aaERC20Paymaster.getDeposit();
 
         vm.startPrank(liquidator);
-        aaERC20Paymaster.liquidate(3020);
+        aaERC20Paymaster.liquidate(625850);
         vm.stopPrank();
 
         uint256 afterAmount = erc20.balanceOf(address(aaERC20Paymaster));
         uint256 afterProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
         uint256 afterLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
-        uint256 afterTickAmount = aaERC20Paymaster.accumulatedFee(3020);
+        uint256 afterAccAmount = aaERC20Paymaster.accumulatedFee(625850);
+        uint256 afterDeposit = aaERC20Paymaster.getDeposit();
 
-        assertEq(beforeAmount - afterAmount, 985);
-        assertEq(afterProtocolAmount - beforeProtocolAmount, 10);
-        assertEq(afterLiquidatorAmount - beforeLiquidatorAmount, 5);
-        assertEq(beforeTickAmount - afterTickAmount, 1000);
+        uint256 diffPm = beforeAmount - afterAmount;
+        uint256 diffProtocol = afterProtocolAmount - beforeProtocolAmount;
+        uint256 diffLiquidator = afterLiquidatorAmount - beforeLiquidatorAmount;
+        uint256 diffAcc = beforeAccAmount - afterAccAmount;
+        assertEq(diffAcc, diffPm + diffProtocol + diffLiquidator);
+        assertEq(diffProtocol / 2, diffLiquidator);
+        assertTrue(afterDeposit > beforeDeposit);
     }
 
     function testLiquidateSwapTick() external {
@@ -513,28 +538,33 @@ contract AAERC20PaymasterTest is Test {
         aaERC20Paymaster.deposit{value: 1 ether}();
         vm.stopPrank();
         vm.mockCall(
-            address(oracle), abi.encodeWithSelector(IPaymasterOracle.getPrice.selector), abi.encode(uint256(4000))
+            address(oracle), abi.encodeWithSelector(IPaymasterOracle.getPrice.selector), abi.encode(uint256(800_000))
         );
 
         address protocolReceiver = aaERC20Paymaster.owner();
         uint256 beforeAmount = erc20.balanceOf(address(aaERC20Paymaster));
         uint256 beforeProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
         uint256 beforeLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
-        uint256 beforeTickAmount = aaERC20Paymaster.accumulatedFee(3020);
+        uint256 beforeAccAmount = aaERC20Paymaster.accumulatedFee(625850);
+        uint256 beforeDeposit = aaERC20Paymaster.getDeposit();
 
         vm.startPrank(liquidator);
-        aaERC20Paymaster.liquidate(3020);
+        aaERC20Paymaster.liquidate(625850);
         vm.stopPrank();
 
         uint256 afterAmount = erc20.balanceOf(address(aaERC20Paymaster));
         uint256 afterProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
         uint256 afterLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
-        uint256 afterTickAmount = aaERC20Paymaster.accumulatedFee(3020);
+        uint256 afterAccAmount = aaERC20Paymaster.accumulatedFee(625850);
+        uint256 afterDeposit = aaERC20Paymaster.getDeposit();
 
-        assertEq(beforeAmount - afterAmount, 985);
-        assertEq(afterProtocolAmount - beforeProtocolAmount, 10);
-        assertEq(afterLiquidatorAmount - beforeLiquidatorAmount, 5);
-        assertEq(beforeTickAmount - afterTickAmount, 1000);
+        uint256 diffPm = beforeAmount - afterAmount;
+        uint256 diffProtocol = afterProtocolAmount - beforeProtocolAmount;
+        uint256 diffLiquidator = afterLiquidatorAmount - beforeLiquidatorAmount;
+        uint256 diffAcc = beforeAccAmount - afterAccAmount;
+        assertEq(diffAcc, diffPm + diffProtocol + diffLiquidator);
+        assertEq(diffProtocol / 2, diffLiquidator);
+        assertTrue(afterDeposit > beforeDeposit);
     }
 
     function testLiquidateNotAllowed() external {
@@ -544,7 +574,7 @@ contract AAERC20PaymasterTest is Test {
         vm.stopPrank();
 
         vm.expectRevert("AA-ERC20 : not liquidatable");
-        aaERC20Paymaster.liquidate(3020);
+        aaERC20Paymaster.liquidate(625850);
     }
 
     function testLiquidateInsufficientAmount() external {
@@ -554,7 +584,7 @@ contract AAERC20PaymasterTest is Test {
         vm.stopPrank();
 
         vm.expectRevert("AA-ERC20 : insufficient liquidate amount");
-        aaERC20Paymaster.liquidate(3001);
+        aaERC20Paymaster.liquidate(28);
     }
 
     function aaERC20Utils() public {
@@ -563,7 +593,7 @@ contract AAERC20PaymasterTest is Test {
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
         );
-        aaERC20Paymaster.transfer(account, 5000);
+        aaERC20Paymaster.transfer(account, 0.05 ether);
         vm.stopPrank();
 
         UserOperation[] memory userOps = new UserOperation[](1);
@@ -572,7 +602,7 @@ contract AAERC20PaymasterTest is Test {
             SimpleAccount.execute.selector,
             address(aaERC20Paymaster),
             0,
-            abi.encodeWithSelector(aaERC20Paymaster.transfer.selector, bob, 10)
+            abi.encodeWithSelector(aaERC20Paymaster.transfer.selector, bob, 0.01 ether)
         );
 
         userOps[0] = UserOperation({
@@ -581,7 +611,7 @@ contract AAERC20PaymasterTest is Test {
             initCode: "",
             callData: callData,
             callGasLimit: 100000,
-            verificationGasLimit: 500000,
+            verificationGasLimit: 200000,
             preVerificationGas: 100000,
             maxFeePerGas: 172676895612,
             maxPriorityFeePerGas: 46047172163,

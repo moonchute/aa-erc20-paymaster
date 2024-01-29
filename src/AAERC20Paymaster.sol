@@ -15,7 +15,6 @@ import {IPaymasterSwap} from "./interfaces/IPaymasterSwap.sol";
 import {IAAERC20Paymaster} from "./interfaces/IAAERC20Paymaster.sol";
 import {IWETH} from "./interfaces/IWETH.sol";
 import {AAERC20} from "./AAERC20.sol";
-import "forge-std/console.sol";
 
 contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
     uint256 public constant REFUND_POSTOP_COST = 41200;
@@ -143,8 +142,7 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
         override
         returns (bytes memory context, uint256 validationData)
     {
-        address sender =
-            userOp.sender == address(this) ? address(uint160(uint256(bytes32(userOp.callData[4:36])))) : userOp.sender;
+        address sender = userOp.sender == address(this) ? address(bytes20(userOp.callData[16:36])) : userOp.sender;
 
         unchecked {
             uint256 feeAmount =
@@ -157,13 +155,11 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
             currentPrice = price;
 
             require(tokenAmount <= balanceOf[sender], "AA-ERC20 : insufficient balance");
-
             accumulatedFee[feePrice] += tokenAmount;
 
             _transfer(sender, address(this), tokenAmount);
-
             validationData = 0;
-            context = abi.encodePacked(price, sender);
+            context = abi.encodePacked(tokenAmount, sender);
         }
     }
 
@@ -174,10 +170,11 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
         }
 
         unchecked {
-            uint256 actualTokenNeeded = (actualGasCost + REFUND_POSTOP_COST * tx.gasprice) * (PRICE_MARKUP + 10000) / 10000;
+            uint256 actualTokenNeeded = (actualGasCost + REFUND_POSTOP_COST * tx.gasprice) * currentPrice / 1 ether
+                * (PRICE_MARKUP + 10000) / 10000;
 
             if (uint256(bytes32(context[0:32])) > actualTokenNeeded) {
-                uint256 refund = uint256(bytes32(context[0:32])) - actualTokenNeeded;
+                uint256 refund = (uint256(bytes32(context[0:32])) - actualTokenNeeded);
                 uint256 feeRange = currentPrice * PRICE_MARKUP / 10000;
                 uint256 feePrice = (currentPrice - 1) / feeRange * feeRange;
 
@@ -194,15 +191,15 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
      * @return isAllowed true if allowed
      */
     function _isLidquidateAllowed(uint256 price) internal returns (bool isAllowed) {
-        uint256 currentPrice = oracle.getPrice(msg.sender, 1 ether);
+        uint256 liquidatePrice = oracle.getPrice(msg.sender, 1 ether);
         uint256 balance = getDeposit();
 
-        if (currentPrice > price * (LIQUIDATOR_THRESHOLD + 10000) / 10000 || minDepositAmount > balance) {
+        if (liquidatePrice > price * (LIQUIDATOR_THRESHOLD + 10000) / 10000 || minDepositAmount > balance) {
             isAllowed = true;
         }
     }
 
-    fallback() external payable {
+    receive() external payable {
         require(msg.sender == address(nativeToken), "AA-ERC20 : fallback not allowed");
     }
 }
