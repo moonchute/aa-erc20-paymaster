@@ -4,7 +4,7 @@ pragma abicoder v2;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import {UniswapPaymasterOracle} from "src/UniswapPaymasterOracle.sol";
+import {UniswapPaymasterOracle} from "src/oracle/UniswapPaymasterOracle.sol";
 import {IUniswapV3Pool} from "v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 contract UniswapPaymasterOracleTest is Test {
@@ -27,6 +27,6 @@ contract UniswapPaymasterOracleTest is Test {
 
   function testCanGetPrice() public {
     uint128 amount = 1 ether;
-    paymasterOracle.getPrice(address(this), amount);
+    (uint256 amountOut,) = paymasterOracle.getPrice(address(this), amount);
   }
 }

@@ -18,15 +18,23 @@ import {AAERC20} from "./AAERC20.sol";
 import "forge-std/console.sol";
 
 contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
-    uint256 public constant PRICE_DENOMINATOR = 1e6;
     uint256 public constant REFUND_POSTOP_COST = 40000;
-    uint256 public constant PRICE_MARKUP = 110e4;
     uint256 internal constant SIG_VALIDATION_FAILED = 1;
+    
+    // protocol parameter in basis
+    uint256 public constant priceMarkup = 1000;
+    uint256 public constant protocolFee = 100;
+    uint256 public constant liquidatorFee = 50;
+    uint256 public constant liquidateThreshold = 700;
 
-    IWETH nativeToken; 
+    uint256 public minDepositAmount = 1 ether;
+
+    IWETH immutable public nativeToken; 
     IPaymasterOracle immutable public oracle;
     IPaymasterSwap immutable public swap;
-    mapping (int24 => uint256) public accumulatedFees;
+
+    mapping (uint256 => uint256) public accumulatedFee;
+    mapping (address => uint256) public accumulatedLiquidateFee;
 
     constructor(
         IEntryPoint _entryPoint,
@@ -44,7 +52,11 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
         _transferOwnership(_owner);
     }
 
-    function withdrawAAERC20Token(address to, uint256 amount) public onlyOwner {
+    function withdrawAAERC20Token(address to) external {
+        uint256 amount = accumulatedLiquidateFee[msg.sender];
+        require(amount > 0, "AA-ERC20 : insufficient withdraw amount");
+
+        accumulatedLiquidateFee[msg.sender] = 0;
         _transfer(address(this), to, amount);
     }
 
@@ -62,18 +74,31 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
         IERC20(token).transfer(to, amount);
     }
 
-    function liquidate(int24 tick) external payable override {
-        uint256 amount = accumulatedFees[tick];
-        require(amount > 0, "AA-ERC20 : no accumulated fees");
-        accumulatedFees[tick] = 0;
-        IERC20(token).transfer(address(swap), amount); 
-        _burn(address(this), amount);
-        swap.swap(uint128(amount));
+    function liquidate(uint256 price) external payable override {
+        uint256 amount = accumulatedFee[price];
+        require(amount > 0, "AA-ERC20 : insufficient liquidate amount");
+        require(_isLidquidateAllowed(price), "AA-ERC20 : not liquidatable");
+
+        accumulatedFee[price] = 0;
+        uint256 protocolAmount = amount * protocolFee / 10000;
+        uint256 liquidatorAmount = amount * liquidatorFee / 10000;
+        uint256 remainAmount = amount - protocolAmount - liquidatorAmount;
+
+        accumulatedLiquidateFee[msg.sender] += liquidatorAmount;
+        accumulatedLiquidateFee[owner()] += protocolAmount;
+
+        _burn(address(this), remainAmount);
+        IERC20(token).transfer(address(swap), remainAmount); 
+        swap.swap(uint128(remainAmount));
 
         uint256 balance = nativeToken.balanceOf(address(this));
         nativeToken.withdraw(balance);
-        uint256 depositAmount = address(this).balance;
-        entryPoint.depositTo{value: depositAmount}(address(this));
+
+        entryPoint.depositTo{value: balance}(address(this));
+    }
+
+    function isLiquidateAllowed(uint256 price) public returns (bool) {
+       return _isLidquidateAllowed(price); 
     }
 
     /// inheritdoc IAccount
@@ -117,17 +142,31 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
             userOp.sender == address(this) ? address(uint160(uint256(bytes32(userOp.callData[4:36])))) : userOp.sender;
 
         unchecked {
-            uint256 feeAmount = (requiredPreFund + (REFUND_POSTOP_COST) * userOp.maxFeePerGas) * PRICE_MARKUP / PRICE_DENOMINATOR;
+            uint256 feeAmount = (requiredPreFund + (REFUND_POSTOP_COST) * userOp.maxFeePerGas) * (priceMarkup + 10000) / 10000;
 
-            (uint256 tokenAmount, int24 tick) = oracle.getPrice(address(this), uint128(feeAmount));
+            (uint256 tokenAmount,) = oracle.getPrice(address(this), uint128(feeAmount));
+            uint256 currentPrice = (tokenAmount * 1 ether / feeAmount);
+            uint256 feeRange = currentPrice * priceMarkup / 10000;
+            uint256 feePrice = (currentPrice - 1) / feeRange * feeRange; 
+
             require(tokenAmount <= balanceOf[sender], "AA-ERC20 : insufficient balance");
 
-            accumulatedFees[tick] += tokenAmount;
+            accumulatedFee[feePrice] += tokenAmount;
             
             _transfer(sender, address(this), tokenAmount);
 
             validationData = 0;
         }
+    }
+
+    function _isLidquidateAllowed(uint256 price) internal returns (bool) {
+       (uint256 currentPrice,) = oracle.getPrice(msg.sender, 1 ether);
+        uint256 balance = getDeposit();
+        if (currentPrice > price * (liquidateThreshold + 10000) / 10000 || minDepositAmount > balance) {
+            return true;
+        }
+
+        return false; 
     }
 
     fallback() external payable {

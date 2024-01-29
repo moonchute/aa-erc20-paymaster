@@ -3,7 +3,7 @@ pragma solidity 0.8.23;
 
 import {Test} from "forge-std/Test.sol";
 import "forge-std/console.sol";
-import {UniswapPaymasterSwap} from "src/UniswapPaymasterSwap.sol";
+import {UniswapPaymasterSwap} from "src/swap/UniswapPaymasterSwap.sol";
 import {IUniswapV3Pool} from "v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IERC20Minimal} from "v3-core/contracts/interfaces/IERC20Minimal.sol";
 
