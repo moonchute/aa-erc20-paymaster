@@ -4,30 +4,22 @@ pragma solidity 0.8.23;
 import {Test} from "forge-std/Test.sol";
 import "account-abstraction/core/EntryPoint.sol";
 import "account-abstraction/interfaces/IEntryPoint.sol";
-
 import {SimpleAccount} from "account-abstraction/samples/SimpleAccount.sol";
-import {SimpleAccountFactory} from "account-abstraction/samples/SimpleAccountFactory.sol";
-
 import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
 import {AAERC20Paymaster} from "../src/AAERC20Paymaster.sol";
 import {IPaymasterOracle} from "../src/interfaces/IPaymasterOracle.sol";
 import {IPaymasterSwap} from "../src/interfaces/IPaymasterSwap.sol";
-import {TestERC20} from "../src/test/TestERC20.sol";
-import {TestSimpleAccount} from "../src/test/TestSimpleAccount.sol";
 import {UniswapPaymasterSwap} from "../src/swap/UniswapPaymasterSwap.sol";
-import "forge-std/console2.sol";
 
 contract AAERC20PaymasterTest is Test {
     AAERC20Paymaster public aaERC20Paymaster;
     EntryPoint public entryPoint;
-    TestERC20 public erc20;
+    IERC20 public erc20;
     address owner;
     address alice;
     address bob;
@@ -48,54 +40,29 @@ contract AAERC20PaymasterTest is Test {
         (bob, bobKey) = makeAddrAndKey("bob");
         liquidator = makeAddr("liquidator");
         entryPoint = new EntryPoint();
-        erc20 = new TestERC20();
 
         // mock oracle and swap
         oracle = IPaymasterOracle(address(bytes20(keccak256("paymasterOracle"))));
         vm.mockCall(
-            address(oracle), 
-            abi.encodeWithSelector(IPaymasterOracle.enable.selector),
-            abi.encode(address(0))
+            address(oracle), abi.encodeWithSelector(IPaymasterOracle.initialize.selector), abi.encode(address(0))
         );
         vm.mockCall(
-            address(oracle), 
-            abi.encodeWithSelector(IPaymasterOracle.getPrice.selector),
-            abi.encode(uint256(1_000), int24(100))
-        );
-        vm.mockCall(
-            address(oracle), 
-            abi.encodeWithSelector(IPaymasterOracle.getTick.selector),
-            abi.encode(int24(100))
+            address(oracle), abi.encodeWithSelector(IPaymasterOracle.getPrice.selector), abi.encode(uint256(1_000))
         );
 
-        // Uniswap V3 Factory
-        address factory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
         // Uniswap SwapRouter
         address router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 
         // WMATIC
         address token0 = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
         // USDC
-        erc20 = TestERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
+        erc20 = IERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
         uint24 fee = 100;
-        IPaymasterSwap swap = new UniswapPaymasterSwap(
-            router, 
-            factory,
-            token0,
-            fee
-        );
+        IPaymasterSwap swap = new UniswapPaymasterSwap(router, token0, fee);
         vm.stopPrank();
-        
+
         vm.startPrank(owner);
-        aaERC20Paymaster =
-            new AAERC20Paymaster(
-                entryPoint, 
-                token0, 
-                IERC20Metadata(address(erc20)), 
-                oracle, 
-                swap, 
-                owner
-            );
+        aaERC20Paymaster = new AAERC20Paymaster(entryPoint, token0, IERC20Metadata(address(erc20)), oracle, swap, owner);
 
         // deposit paymaster
         deal(owner, 100 ether);
@@ -119,7 +86,7 @@ contract AAERC20PaymasterTest is Test {
     function testTransferAAERC20() public {
         vm.prank(alice);
         aaERC20Paymaster.transfer(bob, 1_000);
-        assertEq(aaERC20Paymaster.balanceOf(alice), 9_000 );
+        assertEq(aaERC20Paymaster.balanceOf(alice), 9_000);
         assertEq(aaERC20Paymaster.balanceOf(bob), 1_000);
     }
 
@@ -157,7 +124,7 @@ contract AAERC20PaymasterTest is Test {
 
     function testTransferAAERC20UserOpFromSmartAccount() public {
         vm.startPrank(alice);
-        address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
+        address simpleAccountImpl = address(new SimpleAccount(entryPoint));
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
         );
@@ -166,10 +133,15 @@ contract AAERC20PaymasterTest is Test {
 
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, account, bob, 10);
+        bytes memory callData = abi.encodeWithSelector(
+            SimpleAccount.execute.selector,
+            address(aaERC20Paymaster),
+            0,
+            abi.encodeWithSelector(aaERC20Paymaster.transfer.selector, bob, 10)
+        );
 
         userOps[0] = UserOperation({
-            sender: address(aaERC20Paymaster),
+            sender: account,
             nonce: uint256(0),
             initCode: "",
             callData: callData,
@@ -231,7 +203,7 @@ contract AAERC20PaymasterTest is Test {
 
     function testBurnAAERC20UserOpFromSmartAccount() public {
         vm.startPrank(alice);
-        address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
+        address simpleAccountImpl = address(new SimpleAccount(entryPoint));
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
         );
@@ -240,10 +212,15 @@ contract AAERC20PaymasterTest is Test {
 
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.burnWithFee.selector, account, bob, 10);
+        bytes memory callData = abi.encodeWithSelector(
+            SimpleAccount.execute.selector,
+            address(aaERC20Paymaster),
+            0,
+            abi.encodeWithSelector(aaERC20Paymaster.burn.selector, bob, 10)
+        );
 
         userOps[0] = UserOperation({
-            sender: address(aaERC20Paymaster),
+            sender: account,
             nonce: uint256(0),
             initCode: "",
             callData: callData,
@@ -423,9 +400,7 @@ contract AAERC20PaymasterTest is Test {
 
     function testSmartAccountInvalidSignature() public {
         vm.startPrank(alice);
-        // SimpleAccountFactory factory = new SimpleAccountFactory(entryPoint);
-        // address account = address(factory.createAccount(owner, 0));
-        address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
+        address simpleAccountImpl = address(new SimpleAccount(entryPoint));
 
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
@@ -435,10 +410,10 @@ contract AAERC20PaymasterTest is Test {
 
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, account, bob, 10);
+        bytes memory callData = abi.encodeWithSelector(aaERC20Paymaster.transfer.selector, account, bob, 10);
 
         userOps[0] = UserOperation({
-            sender: address(aaERC20Paymaster),
+            sender: account,
             nonce: uint256(0),
             initCode: "",
             callData: callData,
@@ -463,13 +438,13 @@ contract AAERC20PaymasterTest is Test {
 
     function testERC20Paymaster() public {
         vm.startPrank(alice);
-        address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
+        address simpleAccountImpl = address(new SimpleAccount(entryPoint));
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
         );
         erc20.transfer(account, 5_000);
         aaERC20Paymaster.transfer(account, 5_000);
-        
+
         vm.stopPrank();
         uint256 beforeBalanceAccount = erc20.balanceOf(account);
         uint256 beforeBalanceBob = erc20.balanceOf(bob);
@@ -477,7 +452,8 @@ contract AAERC20PaymasterTest is Test {
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
         bytes memory transferCallData = abi.encodeWithSelector(IERC20.transfer.selector, bob, 10);
-        bytes memory callData = abi.encodeWithSelector(SimpleAccount.execute.selector, address(erc20), 0, transferCallData);
+        bytes memory callData =
+            abi.encodeWithSelector(SimpleAccount.execute.selector, address(erc20), 0, transferCallData);
 
         userOps[0] = UserOperation({
             sender: account,
@@ -498,7 +474,7 @@ contract AAERC20PaymasterTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(aliceKey, signMessage);
         bytes memory signature = abi.encodePacked(r, s, v);
         userOps[0].signature = signature;
-        
+
         entryPoint.handleOps(userOps, payable(owner));
         uint256 afterBalanceAccount = erc20.balanceOf(account);
         uint256 afterBalanceBob = erc20.balanceOf(bob);
@@ -515,7 +491,7 @@ contract AAERC20PaymasterTest is Test {
         uint256 beforeLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
 
         uint256 beforeTickAmount = aaERC20Paymaster.accumulatedFee(3020);
-        
+
         vm.startPrank(liquidator);
         aaERC20Paymaster.liquidate(3020);
         vm.stopPrank();
@@ -524,7 +500,7 @@ contract AAERC20PaymasterTest is Test {
         uint256 afterProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
         uint256 afterLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
         uint256 afterTickAmount = aaERC20Paymaster.accumulatedFee(3020);
-        
+
         assertEq(beforeAmount - afterAmount, 985);
         assertEq(afterProtocolAmount - beforeProtocolAmount, 10);
         assertEq(afterLiquidatorAmount - beforeLiquidatorAmount, 5);
@@ -537,9 +513,7 @@ contract AAERC20PaymasterTest is Test {
         aaERC20Paymaster.deposit{value: 1 ether}();
         vm.stopPrank();
         vm.mockCall(
-            address(oracle), 
-            abi.encodeWithSelector(IPaymasterOracle.getPrice.selector),
-            abi.encode(uint256(4000), int24(150))
+            address(oracle), abi.encodeWithSelector(IPaymasterOracle.getPrice.selector), abi.encode(uint256(4000))
         );
 
         address protocolReceiver = aaERC20Paymaster.owner();
@@ -547,7 +521,7 @@ contract AAERC20PaymasterTest is Test {
         uint256 beforeProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
         uint256 beforeLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
         uint256 beforeTickAmount = aaERC20Paymaster.accumulatedFee(3020);
-        
+
         vm.startPrank(liquidator);
         aaERC20Paymaster.liquidate(3020);
         vm.stopPrank();
@@ -556,7 +530,7 @@ contract AAERC20PaymasterTest is Test {
         uint256 afterProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
         uint256 afterLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
         uint256 afterTickAmount = aaERC20Paymaster.accumulatedFee(3020);
-        
+
         assertEq(beforeAmount - afterAmount, 985);
         assertEq(afterProtocolAmount - beforeProtocolAmount, 10);
         assertEq(afterLiquidatorAmount - beforeLiquidatorAmount, 5);
@@ -568,7 +542,7 @@ contract AAERC20PaymasterTest is Test {
         vm.startPrank(owner);
         aaERC20Paymaster.deposit{value: 1 ether}();
         vm.stopPrank();
-        
+
         vm.expectRevert("AA-ERC20 : not liquidatable");
         aaERC20Paymaster.liquidate(3020);
     }
@@ -578,14 +552,14 @@ contract AAERC20PaymasterTest is Test {
         vm.startPrank(owner);
         aaERC20Paymaster.deposit{value: 1 ether}();
         vm.stopPrank();
-        
+
         vm.expectRevert("AA-ERC20 : insufficient liquidate amount");
         aaERC20Paymaster.liquidate(3001);
     }
-    
+
     function aaERC20Utils() public {
         vm.startPrank(alice);
-        address simpleAccountImpl = address(new TestSimpleAccount(entryPoint));
+        address simpleAccountImpl = address(new SimpleAccount(entryPoint));
         address account = address(
             new ERC1967Proxy(simpleAccountImpl, abi.encodeWithSelector(SimpleAccount.initialize.selector, alice))
         );
@@ -594,10 +568,15 @@ contract AAERC20PaymasterTest is Test {
 
         UserOperation[] memory userOps = new UserOperation[](1);
         bytes memory paymasterAndData = abi.encodePacked(address(aaERC20Paymaster));
-        bytes memory callData = abi.encodeWithSelector(AAERC20Paymaster.transferWithFee.selector, account, bob, 10);
+        bytes memory callData = abi.encodeWithSelector(
+            SimpleAccount.execute.selector,
+            address(aaERC20Paymaster),
+            0,
+            abi.encodeWithSelector(aaERC20Paymaster.transfer.selector, bob, 10)
+        );
 
         userOps[0] = UserOperation({
-            sender: address(aaERC20Paymaster),
+            sender: account,
             nonce: uint256(0),
             initCode: "",
             callData: callData,
@@ -616,6 +595,6 @@ contract AAERC20PaymasterTest is Test {
         bytes memory signature = abi.encodePacked(r, s, v);
         userOps[0].signature = signature;
 
-        entryPoint.handleOps(userOps, payable(owner));        
+        entryPoint.handleOps(userOps, payable(owner));
     }
 }

@@ -20,25 +20,25 @@ import "forge-std/console.sol";
 contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
     uint256 public constant REFUND_POSTOP_COST = 40000;
     uint256 internal constant SIG_VALIDATION_FAILED = 1;
-    
+
     // protocol parameter in basis
-    uint256 public constant priceMarkup = 1000;
-    uint256 public constant protocolFee = 100;
-    uint256 public constant liquidatorFee = 50;
-    uint256 public constant liquidateThreshold = 700;
+    uint256 public constant PRICE_MARKUP = 1000;
+    uint256 public constant PROTOCOL_FEE = 100;
+    uint256 public constant LIQUIDATOR_FEE = 50;
+    uint256 public constant LIQUIDATOR_THRESHOLD = 700;
 
     uint256 public minDepositAmount = 1 ether;
 
-    IWETH immutable public nativeToken; 
-    IPaymasterOracle immutable public oracle;
-    IPaymasterSwap immutable public swap;
+    IWETH public immutable override nativeToken;
+    IPaymasterOracle public immutable override oracle;
+    IPaymasterSwap public immutable override swap;
 
-    mapping (uint256 => uint256) public accumulatedFee;
-    mapping (address => uint256) public accumulatedLiquidateFee;
+    mapping(uint256 => uint256) public accumulatedFee;
+    mapping(address => uint256) public accumulatedLiquidateFee;
 
     constructor(
         IEntryPoint _entryPoint,
-        address _nativetoken, 
+        address _nativetoken,
         IERC20Metadata _token,
         IPaymasterOracle _oracle,
         IPaymasterSwap _swap,
@@ -47,12 +47,52 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
         nativeToken = IWETH(_nativetoken);
         oracle = _oracle;
         swap = _swap;
-        _oracle.enable(address(_token));
-        _swap.enable(address(_token));
+        _oracle.initialize(address(_token));
+        _swap.initialize(address(_token));
         _transferOwnership(_owner);
     }
 
-    function withdrawAAERC20Token(address to) external {
+    /// @inheritdoc IAAERC20Paymaster
+    function transferWithFee(address from, address to, uint256 amount) external override returns (bool) {
+        _requireFromEntryPoint();
+        require(amount <= balanceOf[from], "AA-ERC20 : insufficient balance");
+        _transfer(from, to, amount);
+        return true;
+    }
+
+    /// @inheritdoc IAAERC20Paymaster
+    function burnWithFee(address from, address to, uint256 amount) external override {
+        _requireFromEntryPoint();
+        require(amount <= balanceOf[from], "AA-ERC20 : insufficient balance");
+        _burn(from, amount);
+        IERC20(token).transfer(to, amount);
+    }
+
+    /// @inheritdoc IAAERC20Paymaster
+    function liquidate(uint256 price) external payable override {
+        uint256 amount = accumulatedFee[price];
+        require(amount > 0, "AA-ERC20 : insufficient liquidate amount");
+        require(_isLidquidateAllowed(price), "AA-ERC20 : not liquidatable");
+
+        accumulatedFee[price] = 0;
+        uint256 protocolAmount = amount * PROTOCOL_FEE / 10000;
+        uint256 liquidatorAmount = amount * LIQUIDATOR_FEE / 10000;
+        uint256 remainAmount = amount - protocolAmount - liquidatorAmount;
+
+        accumulatedLiquidateFee[msg.sender] += liquidatorAmount;
+        accumulatedLiquidateFee[owner()] += protocolAmount;
+
+        _burn(address(this), remainAmount);
+        IERC20(token).transfer(address(swap), remainAmount);
+        uint256 amountOut = swap.swap(uint128(remainAmount));
+
+        nativeToken.withdraw(amountOut);
+
+        entryPoint.depositTo{value: amountOut}(address(this));
+    }
+
+    /// @inheritdoc IAAERC20Paymaster
+    function withdrawLiquidatorFee(address to) external override {
         uint256 amount = accumulatedLiquidateFee[msg.sender];
         require(amount > 0, "AA-ERC20 : insufficient withdraw amount");
 
@@ -60,45 +100,9 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
         _transfer(address(this), to, amount);
     }
 
-    function transferWithFee(address from, address to, uint256 amount) external returns (bool) {
-        _requireFromEntryPoint();
-        require(amount <= balanceOf[from], "AA-ERC20 : insufficient balance");
-        _transfer(from, to, amount);
-        return true;
-    }
-
-    function burnWithFee(address from, address to, uint256 amount) external {
-        _requireFromEntryPoint();
-        require(amount <= balanceOf[from], "AA-ERC20 : insufficient balance");
-        _burn(from, amount);
-        IERC20(token).transfer(to, amount);
-    }
-
-    function liquidate(uint256 price) external payable override {
-        uint256 amount = accumulatedFee[price];
-        require(amount > 0, "AA-ERC20 : insufficient liquidate amount");
-        require(_isLidquidateAllowed(price), "AA-ERC20 : not liquidatable");
-
-        accumulatedFee[price] = 0;
-        uint256 protocolAmount = amount * protocolFee / 10000;
-        uint256 liquidatorAmount = amount * liquidatorFee / 10000;
-        uint256 remainAmount = amount - protocolAmount - liquidatorAmount;
-
-        accumulatedLiquidateFee[msg.sender] += liquidatorAmount;
-        accumulatedLiquidateFee[owner()] += protocolAmount;
-
-        _burn(address(this), remainAmount);
-        IERC20(token).transfer(address(swap), remainAmount); 
-        swap.swap(uint128(remainAmount));
-
-        uint256 balance = nativeToken.balanceOf(address(this));
-        nativeToken.withdraw(balance);
-
-        entryPoint.depositTo{value: balance}(address(this));
-    }
-
-    function isLiquidateAllowed(uint256 price) public returns (bool) {
-       return _isLidquidateAllowed(price); 
+    /// @inheritdoc IAAERC20Paymaster
+    function isLiquidateAllowed(uint256 price) public override returns (bool) {
+        return _isLidquidateAllowed(price);
     }
 
     /// inheritdoc IAccount
@@ -133,7 +137,7 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
     }
 
     /// inheritdoc BasePaymaster
-    function _validatePaymasterUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 requiredPreFund)
+    function _validatePaymasterUserOp(UserOperation calldata userOp, bytes32, uint256 requiredPreFund)
         internal
         override
         returns (bytes memory context, uint256 validationData)
@@ -142,31 +146,37 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
             userOp.sender == address(this) ? address(uint160(uint256(bytes32(userOp.callData[4:36])))) : userOp.sender;
 
         unchecked {
-            uint256 feeAmount = (requiredPreFund + (REFUND_POSTOP_COST) * userOp.maxFeePerGas) * (priceMarkup + 10000) / 10000;
+            uint256 feeAmount =
+                (requiredPreFund + (REFUND_POSTOP_COST) * userOp.maxFeePerGas) * (PRICE_MARKUP + 10000) / 10000;
 
-            (uint256 tokenAmount,) = oracle.getPrice(address(this), uint128(feeAmount));
+            uint256 tokenAmount = oracle.getPrice(address(this), uint128(feeAmount));
             uint256 currentPrice = (tokenAmount * 1 ether / feeAmount);
-            uint256 feeRange = currentPrice * priceMarkup / 10000;
-            uint256 feePrice = (currentPrice - 1) / feeRange * feeRange; 
+            uint256 feeRange = currentPrice * PRICE_MARKUP / 10000;
+            uint256 feePrice = (currentPrice - 1) / feeRange * feeRange;
 
             require(tokenAmount <= balanceOf[sender], "AA-ERC20 : insufficient balance");
 
             accumulatedFee[feePrice] += tokenAmount;
-            
+
             _transfer(sender, address(this), tokenAmount);
 
             validationData = 0;
         }
     }
 
-    function _isLidquidateAllowed(uint256 price) internal returns (bool) {
-       (uint256 currentPrice,) = oracle.getPrice(msg.sender, 1 ether);
+    /**
+     * @dev Check if the liquidation is allowed. The liquidation is allowed if the fee is insolvent or
+     *      the deposit amount in entrypoint is insufficient.
+     * @param price The fee price to liquidate
+     * @return isAllowed true if allowed
+     */
+    function _isLidquidateAllowed(uint256 price) internal returns (bool isAllowed) {
+        uint256 currentPrice = oracle.getPrice(msg.sender, 1 ether);
         uint256 balance = getDeposit();
-        if (currentPrice > price * (liquidateThreshold + 10000) / 10000 || minDepositAmount > balance) {
-            return true;
-        }
 
-        return false; 
+        if (currentPrice > price * (LIQUIDATOR_THRESHOLD + 10000) / 10000 || minDepositAmount > balance) {
+            isAllowed = true;
+        }
     }
 
     fallback() external payable {
