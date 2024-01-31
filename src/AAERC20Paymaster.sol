@@ -10,6 +10,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
+import {IAAERC20Factory} from "./interfaces/IAAERC20Factory.sol";
 import {IPaymasterOracle} from "./interfaces/IPaymasterOracle.sol";
 import {IPaymasterSwap} from "./interfaces/IPaymasterSwap.sol";
 import {IAAERC20Paymaster} from "./interfaces/IAAERC20Paymaster.sol";
@@ -22,13 +23,15 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
 
     // protocol parameter in basis
     uint256 public constant PRICE_MARKUP = 1000;
-    uint256 public constant PROTOCOL_FEE = 100;
+    uint256 public constant PROTOCOL_FEE = 50;
+    uint256 public constant OWNER_FEE = 50;
     uint256 public constant LIQUIDATOR_FEE = 50;
     uint256 public constant LIQUIDATOR_THRESHOLD = 700;
 
     uint256 public minDepositAmount = 1 ether;
     uint256 public override currentPrice;
 
+    address public immutable override factory;
     IWETH public immutable override nativeToken;
     IPaymasterOracle public immutable override oracle;
     IPaymasterSwap public immutable override swap;
@@ -37,6 +40,7 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
     mapping(address => uint256) public override accumulatedLiquidateFee;
 
     constructor(
+        address _factory,
         IEntryPoint _entryPoint,
         address _nativetoken,
         IERC20Metadata _token,
@@ -44,6 +48,7 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
         IPaymasterSwap _swap,
         address _owner
     ) AAERC20(_token) BasePaymaster(_entryPoint) {
+        factory = _factory;
         nativeToken = IWETH(_nativetoken);
         oracle = _oracle;
         swap = _swap;
@@ -76,11 +81,13 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
 
         accumulatedFee[price] = 0;
         uint256 protocolAmount = amount * PROTOCOL_FEE / 10000;
+        uint256 ownerAmount = amount * OWNER_FEE / 10000;
         uint256 liquidatorAmount = amount * LIQUIDATOR_FEE / 10000;
-        uint256 remainAmount = amount - protocolAmount - liquidatorAmount;
+        uint256 remainAmount = amount - protocolAmount - ownerAmount - liquidatorAmount;
 
+        accumulatedLiquidateFee[IAAERC20Factory(factory).owner()] += protocolAmount;
+        accumulatedLiquidateFee[owner()] += ownerAmount;
         accumulatedLiquidateFee[msg.sender] += liquidatorAmount;
-        accumulatedLiquidateFee[owner()] += protocolAmount;
 
         _burn(address(this), remainAmount);
         IERC20(token).transfer(address(swap), remainAmount);

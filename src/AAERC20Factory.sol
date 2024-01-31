@@ -35,6 +35,7 @@ contract AAERC20Factory is IAAERC20Factory {
         bytes32 salt = keccak256(abi.encodePacked(_token, _oracle, _swap, _entryPoint));
         address aaerc20Address = address(
             new AAERC20Paymaster{salt: salt}(
+                address(this),
                 IEntryPoint(_entryPoint),
                 nativeToken,
                 IERC20Metadata(_token),

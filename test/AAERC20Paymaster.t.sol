@@ -12,6 +12,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
 import {AAERC20Paymaster} from "../src/AAERC20Paymaster.sol";
+import {IAAERC20Factory} from "../src/interfaces/IAAERC20Factory.sol";
 import {IPaymasterOracle} from "../src/interfaces/IPaymasterOracle.sol";
 import {IPaymasterSwap} from "../src/interfaces/IPaymasterSwap.sol";
 import {UniswapPaymasterSwap} from "../src/swap/UniswapPaymasterSwap.sol";
@@ -20,6 +21,7 @@ contract AAERC20PaymasterTest is Test {
     AAERC20Paymaster public aaERC20Paymaster;
     EntryPoint public entryPoint;
     IERC20 public erc20;
+    address admin;
     address owner;
     address alice;
     address bob;
@@ -27,6 +29,7 @@ contract AAERC20PaymasterTest is Test {
     uint256 bobKey;
     address liquidator;
     IPaymasterOracle oracle;
+    address factory;
 
     error FailedOp(uint256 opIndex, string reason);
 
@@ -36,18 +39,23 @@ contract AAERC20PaymasterTest is Test {
         vm.selectFork(forkId);
 
         owner = makeAddr("owner");
+        admin = makeAddr("admin");
         (alice, aliceKey) = makeAddrAndKey("alice");
         (bob, bobKey) = makeAddrAndKey("bob");
         liquidator = makeAddr("liquidator");
         entryPoint = new EntryPoint();
+        factory = makeAddr("factory");
 
-        // mock oracle and swap
+        // mock oracle, swap and factory
         oracle = IPaymasterOracle(address(bytes20(keccak256("paymasterOracle"))));
         vm.mockCall(
             address(oracle), abi.encodeWithSelector(IPaymasterOracle.initialize.selector), abi.encode(address(0))
         );
         vm.mockCall(
             address(oracle), abi.encodeWithSelector(IPaymasterOracle.getPrice.selector), abi.encode(uint256(100_000))
+        );
+        vm.mockCall(
+            address(factory), abi.encodeWithSelector(IAAERC20Factory.owner.selector), abi.encode(admin)
         );
 
         // Uniswap SwapRouter
@@ -58,11 +66,13 @@ contract AAERC20PaymasterTest is Test {
         // USDC
         erc20 = IERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
         uint24 fee = 100;
+
+        vm.startPrank(admin);
         IPaymasterSwap swap = new UniswapPaymasterSwap(router, token0, fee);
         vm.stopPrank();
 
         vm.startPrank(owner);
-        aaERC20Paymaster = new AAERC20Paymaster(entryPoint, token0, IERC20Metadata(address(erc20)), oracle, swap, owner);
+        aaERC20Paymaster = new AAERC20Paymaster(factory, entryPoint, token0, IERC20Metadata(address(erc20)), oracle, swap, owner);
 
         // deposit paymaster
         deal(owner, 100 ether);
@@ -505,9 +515,10 @@ contract AAERC20PaymasterTest is Test {
 
     function testLiquidateAddDeposit() external {
         aaERC20Utils();
-        address protocolReceiver = aaERC20Paymaster.owner();
+        address paymasterOwner = aaERC20Paymaster.owner();
         uint256 beforeAmount = erc20.balanceOf(address(aaERC20Paymaster));
-        uint256 beforeProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
+        uint256 beforProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(admin);
+        uint256 beforeOwnerAmount = aaERC20Paymaster.accumulatedLiquidateFee(paymasterOwner);
         uint256 beforeLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
 
         uint256 beforeAccAmount = aaERC20Paymaster.accumulatedFee(625850);
@@ -518,17 +529,20 @@ contract AAERC20PaymasterTest is Test {
         vm.stopPrank();
 
         uint256 afterAmount = erc20.balanceOf(address(aaERC20Paymaster));
-        uint256 afterProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
+        uint256 afterProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(admin);
+        uint256 afterOwnerAmount = aaERC20Paymaster.accumulatedLiquidateFee(paymasterOwner);
         uint256 afterLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
         uint256 afterAccAmount = aaERC20Paymaster.accumulatedFee(625850);
         uint256 afterDeposit = aaERC20Paymaster.getDeposit();
 
         uint256 diffPm = beforeAmount - afterAmount;
-        uint256 diffProtocol = afterProtocolAmount - beforeProtocolAmount;
+        uint256 diffProtocol = afterProtocolAmount - beforProtocolAmount;
+        uint256 diffOwner = afterOwnerAmount - beforeOwnerAmount;
         uint256 diffLiquidator = afterLiquidatorAmount - beforeLiquidatorAmount;
         uint256 diffAcc = beforeAccAmount - afterAccAmount;
-        assertEq(diffAcc, diffPm + diffProtocol + diffLiquidator);
-        assertEq(diffProtocol / 2, diffLiquidator);
+        assertEq(diffAcc, diffPm + diffProtocol + diffOwner + diffLiquidator);
+        assertEq(diffProtocol, diffOwner);
+        assertEq(diffOwner, diffLiquidator);
         assertTrue(afterDeposit > beforeDeposit);
     }
 
@@ -541,9 +555,10 @@ contract AAERC20PaymasterTest is Test {
             address(oracle), abi.encodeWithSelector(IPaymasterOracle.getPrice.selector), abi.encode(uint256(800_000))
         );
 
-        address protocolReceiver = aaERC20Paymaster.owner();
+        address paymasterOwner = aaERC20Paymaster.owner();
         uint256 beforeAmount = erc20.balanceOf(address(aaERC20Paymaster));
-        uint256 beforeProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
+        uint256 beforeProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(admin);
+        uint256 beforeOwnerAmount = aaERC20Paymaster.accumulatedLiquidateFee(paymasterOwner);
         uint256 beforeLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
         uint256 beforeAccAmount = aaERC20Paymaster.accumulatedFee(625850);
         uint256 beforeDeposit = aaERC20Paymaster.getDeposit();
@@ -553,17 +568,20 @@ contract AAERC20PaymasterTest is Test {
         vm.stopPrank();
 
         uint256 afterAmount = erc20.balanceOf(address(aaERC20Paymaster));
-        uint256 afterProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(protocolReceiver);
+        uint256 afterProtocolAmount = aaERC20Paymaster.accumulatedLiquidateFee(admin);
+        uint256 afterOwnerAmount = aaERC20Paymaster.accumulatedLiquidateFee(paymasterOwner);
         uint256 afterLiquidatorAmount = aaERC20Paymaster.accumulatedLiquidateFee(liquidator);
         uint256 afterAccAmount = aaERC20Paymaster.accumulatedFee(625850);
         uint256 afterDeposit = aaERC20Paymaster.getDeposit();
 
         uint256 diffPm = beforeAmount - afterAmount;
         uint256 diffProtocol = afterProtocolAmount - beforeProtocolAmount;
+        uint256 diffOwner = afterOwnerAmount - beforeOwnerAmount;
         uint256 diffLiquidator = afterLiquidatorAmount - beforeLiquidatorAmount;
         uint256 diffAcc = beforeAccAmount - afterAccAmount;
-        assertEq(diffAcc, diffPm + diffProtocol + diffLiquidator);
-        assertEq(diffProtocol / 2, diffLiquidator);
+        assertEq(diffAcc, diffPm + diffProtocol + diffLiquidator + diffOwner);
+        assertEq(diffProtocol, diffOwner);
+        assertEq(diffOwner, diffLiquidator);
         assertTrue(afterDeposit > beforeDeposit);
     }
 
