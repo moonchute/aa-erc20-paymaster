@@ -5,6 +5,7 @@ pragma abicoder v2;
 import "forge-std/Test.sol";
 import {UniswapPaymasterOracle} from "src/oracle/UniswapPaymasterOracle.sol";
 import {IUniswapV3Pool} from "v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import "forge-std/console.sol";
 
 contract UniswapPaymasterOracleTest is Test {
     UniswapPaymasterOracle public paymasterOracle;
@@ -22,7 +23,7 @@ contract UniswapPaymasterOracleTest is Test {
 
         uint24 fee = 100;
         paymasterOracle = new UniswapPaymasterOracle(factory, token0, fee);
-        paymasterOracle.initialize(token1);
+        paymasterOracle.initialize(abi.encodePacked(token1));
     }
 
     function testCanGetPrice() public {

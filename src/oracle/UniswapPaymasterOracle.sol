@@ -19,7 +19,13 @@ contract UniswapPaymasterOracle is IPaymasterOracle {
     }
 
     /// @inheritdoc IPaymasterOracle
-    function initialize(address token0) public override {
+    function initialize(bytes memory data) public override {
+        bytes20 tokenBytes;
+
+        assembly {
+            tokenBytes := mload(add(data, 0x20))
+        }
+        address token0 = address(tokenBytes);
         address pool = IUniswapV3Factory(factory).getPool(token0, nativeToken, fee);
         pools[msg.sender] = pool;
     }
@@ -27,10 +33,14 @@ contract UniswapPaymasterOracle is IPaymasterOracle {
     /// @inheritdoc IPaymasterOracle
     function getPrice(address from, uint128 amount) public view override returns (uint256) {
         address pool = pools[from];
+        address token0 = IUniswapV3Pool(pool).token0();
+        address token1 = IUniswapV3Pool(pool).token1();
+        address erc20Token = nativeToken == token0 ? token1 : token0;
+
         (, int24 tick,,,,,) = IUniswapV3Pool(pool).slot0();
 
         uint256 feeAmount =
-            OracleLibrary.getQuoteAtTick(tick, amount, IUniswapV3Pool(pool).token0(), IUniswapV3Pool(pool).token1());
+            OracleLibrary.getQuoteAtTick(tick, amount, nativeToken, erc20Token);
 
         return feeAmount;
     }

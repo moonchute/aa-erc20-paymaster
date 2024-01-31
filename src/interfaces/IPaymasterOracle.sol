@@ -7,9 +7,9 @@ pragma solidity >=0.7.0;
 interface IPaymasterOracle {
     /**
      * @dev Initialize the oracle
-     * @param token0 The address of token0
+     * @param data The data of initialization
      */
-    function initialize(address token0) external;
+    function initialize(bytes calldata data) external;
 
     /**
      * @dev Get the price
