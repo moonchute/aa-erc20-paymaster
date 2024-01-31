@@ -55,6 +55,13 @@ interface IAAERC20Paymaster is IAccount {
     function accumulatedLiquidateFee(address liquidator) external view returns (uint256 fee);
 
     /**
+     * @dev Initialize the oracle and swap
+     * @param oracleData The data of oracle initialization
+     * @param swapData The data of swap initialization
+     */
+    function initialize(bytes calldata oracleData, bytes calldata swapData) external;
+
+    /**
      * @dev Transfer with fee paid with token
      * @param from The address of the sender
      * @param to The address of the recipient

@@ -52,9 +52,12 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
         nativeToken = IWETH(_nativetoken);
         oracle = _oracle;
         swap = _swap;
-        _oracle.initialize(address(_token));
-        _swap.initialize(address(_token));
         _transferOwnership(_owner);
+    }
+
+    function initialize(bytes calldata oracleData, bytes calldata swapData) external onlyOwner {
+        oracle.initialize(oracleData);
+        swap.initialize(swapData);
     }
 
     /// @inheritdoc IAAERC20Paymaster
@@ -156,6 +159,8 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
                 (requiredPreFund + (REFUND_POSTOP_COST) * userOp.maxFeePerGas) * (PRICE_MARKUP + 10000) / 10000;
 
             uint256 tokenAmount = oracle.getPrice(address(this), uint128(feeAmount));
+            require(tokenAmount > 0, "AA-ERC20 : fee cannot be zero");
+
             uint256 price = (tokenAmount * 1 ether / feeAmount);
             uint256 feeRange = price * PRICE_MARKUP / 10000;
             uint256 feePrice = (price - 1) / feeRange * feeRange;

@@ -24,7 +24,8 @@ contract UniswapPaymasterSwap is IPaymasterSwap {
     }
 
     /// @inheritdoc IPaymasterSwap
-    function initialize(address token0) public override {
+    function initialize(bytes calldata data) public override {
+        address token0 = address(bytes20(data[0:20]));
         if (IERC20Minimal(token0).allowance(address(this), swapRouter) == 0) {
             IERC20Minimal(token0).approve(swapRouter, type(uint256).max);
         }

@@ -27,7 +27,7 @@ contract UniswapPaymasterSwapTest is Test {
         uint24 fee = 100;
 
         paymasterSwap = new UniswapPaymasterSwap(router, token0, fee);
-        paymasterSwap.initialize(token1);
+        paymasterSwap.initialize(abi.encodePacked(token1));
 
         deal(token1, owner, 1 ether);
         deal(token1, address(paymasterSwap), 1 ether);

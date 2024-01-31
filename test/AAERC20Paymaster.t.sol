@@ -73,6 +73,7 @@ contract AAERC20PaymasterTest is Test {
 
         vm.startPrank(owner);
         aaERC20Paymaster = new AAERC20Paymaster(factory, entryPoint, token0, IERC20Metadata(address(erc20)), oracle, swap, owner);
+        aaERC20Paymaster.initialize(abi.encodePacked(erc20), abi.encodePacked(erc20));
 
         // deposit paymaster
         deal(owner, 100 ether);

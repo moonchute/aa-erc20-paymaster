@@ -7,9 +7,9 @@ pragma solidity 0.8.23;
 interface IPaymasterSwap {
     /**
      * @dev Initialize the swap
-     * @param token The address of token to swap
+     * @param data The data of initialization
      */
-    function initialize(address token) external;
+    function initialize(bytes calldata data) external;
 
     /**
      * @dev Swap the token

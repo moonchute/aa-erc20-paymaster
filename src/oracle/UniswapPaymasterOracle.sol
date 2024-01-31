@@ -19,7 +19,13 @@ contract UniswapPaymasterOracle is IPaymasterOracle {
     }
 
     /// @inheritdoc IPaymasterOracle
-    function initialize(address token0) public override {
+    function initialize(bytes memory data) public override {
+        bytes20 tokenBytes;
+
+        assembly {
+            tokenBytes := mload(add(data, 0x20))
+        }
+        address token0 = address(tokenBytes);
         address pool = IUniswapV3Factory(factory).getPool(token0, nativeToken, fee);
         pools[msg.sender] = pool;
     }
