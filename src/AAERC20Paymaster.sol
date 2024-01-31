@@ -23,8 +23,8 @@ contract AAERC20Paymaster is IAAERC20Paymaster, BasePaymaster, AAERC20 {
 
     // protocol parameter in basis
     uint256 public constant PRICE_MARKUP = 1000;
-    uint256 public constant PROTOCOL_FEE = 50;
-    uint256 public constant OWNER_FEE = 50;
+    uint256 public constant PROTOCOL_FEE = 100;
+    uint256 public constant OWNER_FEE = 100;
     uint256 public constant LIQUIDATOR_FEE = 50;
     uint256 public constant LIQUIDATOR_THRESHOLD = 700;
 

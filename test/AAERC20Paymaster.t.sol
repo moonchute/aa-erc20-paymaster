@@ -542,7 +542,7 @@ contract AAERC20PaymasterTest is Test {
         uint256 diffAcc = beforeAccAmount - afterAccAmount;
         assertEq(diffAcc, diffPm + diffProtocol + diffOwner + diffLiquidator);
         assertEq(diffProtocol, diffOwner);
-        assertEq(diffOwner, diffLiquidator);
+        assertEq(diffOwner, diffLiquidator * 2);
         assertTrue(afterDeposit > beforeDeposit);
     }
 
@@ -581,7 +581,7 @@ contract AAERC20PaymasterTest is Test {
         uint256 diffAcc = beforeAccAmount - afterAccAmount;
         assertEq(diffAcc, diffPm + diffProtocol + diffLiquidator + diffOwner);
         assertEq(diffProtocol, diffOwner);
-        assertEq(diffOwner, diffLiquidator);
+        assertEq(diffOwner, diffLiquidator * 2);
         assertTrue(afterDeposit > beforeDeposit);
     }
 
