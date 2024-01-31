@@ -10,6 +10,13 @@ import {IWETH} from "./IWETH.sol";
  * @title The interface for the AAERC20 Paymaster.
  */
 interface IAAERC20Paymaster is IAccount {
+
+    /**
+     * @dev Get the factory address
+     * @return factory The address of the factory
+     */
+    function factory() external view returns (address);
+
     /**
      * @dev Get the current price
      * @return price The current price
