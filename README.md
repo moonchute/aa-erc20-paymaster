@@ -16,7 +16,7 @@ The AA-ERC20 Paymaster addresses these challenges by integrating the capabilitie
 ![AA-ERC20](img/AA-ERC20.png)
 
 ### Permissionless ERC20 Paymaster
-![Permissionless ERC20 Paymaster](img/Permissionless-ERC20-Paymaster)
+![Permissionless ERC20 Paymaster](img/Permissionless-ERC20-Paymaster.png)
 
 ### Feature
 - Eliminates the need for a third party to pay gas fees.
