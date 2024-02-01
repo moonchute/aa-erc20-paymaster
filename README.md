@@ -13,10 +13,10 @@ This setup can be cumbersome and compromise the privacy of smart accounts, parti
 The AA-ERC20 Paymaster addresses these challenges by integrating the capabilities of "AA-ERC20" and "Permissionless ERC20 Paymaster." This fusino enables the wrapping of ERC20 tokens into AA-ERC20 tokens, which can then be used to pay gas fees. The protocol permits anyone to act as the paymaster's liquidator, ensuring the paymaster remains permissionless and solvent.
 
 ### AA-ERC20
-![AA-ERC20](img/AA-ERC20.png =1413x)
+<img src="img/AA-ERC20.png" width="500" />
 
 ### Permissionless ERC20 Paymaster
-![Permissionless ERC20 Paymaster](img/Permissionless-ERC20-Paymaster.png =1053x)
+<img src="img/Permissionless-ERC20-Paymaster.png" width="500" />
 
 ### Feature
 - Eliminates the need for a third party to pay gas fees.
